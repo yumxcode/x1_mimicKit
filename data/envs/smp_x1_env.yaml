@@ -14,9 +14,45 @@ num_disc_obs_steps: 10
 rand_reset: True
 
 ref_char_offset: [2.0, 0.0, 0.0] # m
-# [root pos (3), root rot expmap (3), 29 dof] - standing home pose,
-# base z from build_x1_assets keyframe (0.6016 m settled)
-init_pose: [0, 0, 0.6016, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.48891, 0.06213, -0.33853, 0.63204, -0.27224, 0, -0.48891, -0.06213, 0.33853, 0.63204, -0.27224, 0]
+# [root pos (3), root rot expmap (3), 29 dof] - standing home pose from
+# build_x1_assets keyframe (base z 0.6016, legs bent)
+init_pose: [
+  0.0,
+  0.0,
+  0.6016,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.48891,
+  0.06213,
+  -0.33853,
+  0.63204,
+  -0.27224,
+  0.0,
+  -0.48891,
+  -0.06213,
+  0.33853,
+  0.63204,
+  -0.27224,
+  0.0,
+]
 
 enable_early_termination: True
 key_bodies: ["left_ankle_roll_link", "right_ankle_roll_link", "left_wrist_roll_link", "right_wrist_roll_link"]

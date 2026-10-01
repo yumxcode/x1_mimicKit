@@ -63,6 +63,14 @@ def main():
               flush=True)
         sys.exit(1)
 
+    # ensure the IsaacLab USD asset exists (MJCF -> USD conversion)
+    usd = os.path.join(repo, "data/assets/x1/x1.usd")
+    if not os.path.exists(usd):
+        r = subprocess.run([sys.executable, "scripts_remote/convert_x1_usd.py"])
+        if r.returncode != 0 or not os.path.exists(usd):
+            print("[policy] FAIL mjcf->usd conversion failed", flush=True)
+            sys.exit(1)
+
     out_dir = "output/x1_smp_policy"
     r = subprocess.run(
         [sys.executable, "mimickit/run.py", "--arg_file", "args/smp_x1_args.txt"])

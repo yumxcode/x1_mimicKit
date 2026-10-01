@@ -125,10 +125,7 @@ class IsaacLabEngine(engine.Engine):
         """
         try:
             from isaacsim.core.cloner import Cloner
-            try:
-                return Cloner(self._stage)
-            except TypeError:
-                return Cloner()
+            return Cloner()
         except ImportError:
             pass
 
@@ -136,12 +133,26 @@ class IsaacLabEngine(engine.Engine):
 
         class _USDRefCloner:
             def clone(self, source_prim_path, prim_paths,
-                      replicate_physics=False, copy_from_source=True):
+                      replicate_physics=False, copy_from_source=True,
+                      positions=None, orientations=None):
+                from pxr import Gf, UsdGeom
                 stage = engine_self._stage
-                for p in prim_paths:
+                for i, p in enumerate(prim_paths):
                     dst = stage.DefinePrim(p, "Xform")
                     # internal reference: independent copy incl. physics
                     dst.GetReferences().AddInternalReference(source_prim_path)
+                    if positions is not None:
+                        xform = UsdGeom.Xformable(dst)
+                        xform.ClearXformOpOrder()
+                        trans = xform.AddTranslateOp()
+                        trans.Set(Gf.Vec3d(*[float(v) for v in positions[i]]))
+                        if orientations is not None:
+                            q = orientations[i]
+                            quat = Gf.Quatd(float(q[-1]),
+                                            Gf.Vec3d(float(q[0]), float(q[1]),
+                                                     float(q[2])))
+                            rot = xform.AddOrientOp()
+                            rot.Set(quat)
 
             def filter_collisions(self, physics_scene_path, prefix,
                                   prim_paths, global_paths=None):

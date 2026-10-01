@@ -1,0 +1,8 @@
+current: prod
+profiles:
+    prod:
+        base_url: ""
+        api_key: ""
+        timeout: 30s
+        retry: 3
+        concurrency: 4

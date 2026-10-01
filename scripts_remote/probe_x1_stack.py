@@ -119,21 +119,41 @@ def s2_tinymdm():
 
 
 def s3_engine_view_motion():
+    # convert MJCF -> USD for the IsaacLab engine (idempotent)
+    r0 = subprocess.run(
+        [sys.executable, "scripts_remote/convert_x1_usd.py"],
+        capture_output=True, text=True, timeout=900)
+    if r0.returncode != 0:
+        raise RuntimeError("mjcf->usd convert failed: "
+                           + (r0.stdout + r0.stderr)[-500:])
+
+    # multi-env run to exercise _build_envs cloning, _clone_obj_prim
+    # positions/orientations and inter-env collision filtering
     r = subprocess.run(
-        [sys.executable, "mimickit/run.py", "--arg_file", "args/view_motion_x1_args.txt"],
+        [sys.executable, "mimickit/run.py", "--arg_file",
+         "args/view_motion_x1_args.txt", "--num_envs", "4"],
         capture_output=True, text=True, timeout=1200)
     out = r.stdout + r.stderr
     tail = out.strip().splitlines()[-3:]
     assert r.returncode == 0, "run.py exit " + str(r.returncode) + ": " + " | ".join(tail)
     assert "Mean Episode Length" in out, \
         "view_motion did not complete (no Mean Episode Length): " + " | ".join(tail)
-    return "view_motion completed"
+    return "view_motion num_envs=4 completed"
+
+
+def s4_isaacgym_available():
+    try:
+        import isaacgym  # noqa: F401
+        return "isaacgym importable (legacy Isaac Gym present)"
+    except Exception as e:
+        return f"isaacgym NOT available ({type(e).__name__}: {e}) - use isaaclab"
 
 
 def main():
     stage("char", s1_char_model)
     stage("tinymdm", s2_tinymdm)
     stage("engine", s3_engine_view_motion)
+    print("INFO isaacgym:", s4_isaacgym_available(), flush=True)
     ok = all(r[1] for r in RESULTS)
     print("PROBE_RESULT:", "PASS" if ok else "FAIL", flush=True)
     sys.exit(0 if ok else 1)
