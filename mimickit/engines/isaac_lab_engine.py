@@ -17,11 +17,18 @@ ROT_XYZW_TO_WXYZ = [3, 0, 1, 2]
 
 
 def _to_torch(x, device=None):
-    """Convert warp/numpy arrays returned by newer IsaacLab to torch."""
+    """Convert warp/numpy/lazy-proxy arrays returned by newer IsaacLab to
+    torch. Some data members are cuda-backed lazy proxies (not Tensor
+    subclasses) whose __array__ fails on GPU - move them to host first."""
     if isinstance(x, torch.Tensor):
         return x
-    return torch.as_tensor(np.asarray(x),
-                           device=device if device is not None else "cpu")
+    dev = device if device is not None else "cpu"
+    try:
+        return torch.as_tensor(x, device=dev)
+    except Exception:
+        pass
+    host = x.cpu() if hasattr(x, "cpu") else x
+    return torch.as_tensor(np.asarray(host), device=dev)
 
 
 ENV_PATH_TEMPLATE = "/World/envs/env_{}"
