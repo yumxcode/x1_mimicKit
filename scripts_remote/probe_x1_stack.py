@@ -124,8 +124,10 @@ def s3_engine_view_motion():
         [sys.executable, "scripts_remote/convert_x1_usd.py"],
         capture_output=True, text=True, timeout=900)
     if r0.returncode != 0:
-        raise RuntimeError("mjcf->usd convert failed: "
-                           + (r0.stdout + r0.stderr)[-500:])
+        keep = [l for l in (r0.stdout + r0.stderr).splitlines()
+                if ("Error" in l or "error" in l or "Traceback" in l
+                    or "File \"" in l or "CONVERT" in l)]
+        raise RuntimeError("mjcf->usd convert failed: " + " | ".join(keep[-14:]))
 
     # multi-env run to exercise _build_envs cloning, _clone_obj_prim
     # positions/orientations and inter-env collision filtering
