@@ -9,4 +9,4 @@ root_height_obs: True
 
 key_bodies: ["left_ankle_roll_link", "right_ankle_roll_link", "left_wrist_roll_link", "right_wrist_roll_link"]
 
-motion_file: "data/motions/x1_v3/x1_run1_subject5_seg0.pkl"
+motion_file: "data/motions/x1_v3/x1_probe_2s.pkl"
