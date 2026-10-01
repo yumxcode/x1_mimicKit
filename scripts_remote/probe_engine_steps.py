@@ -57,17 +57,19 @@ def main():
     import torch
     import envs.env_builder as env_builder
 
+    num_envs = int(os.environ.get("PROBE_NUM_ENVS", "4"))
     t0 = time.time()
     env = env_builder.build_env(
         "data/envs/view_motion_x1_probe_env.yaml",
         "data/engines/isaac_lab_engine.yaml",
-        num_envs=1, device="cuda:0", visualize=False, record_video=False)
-    print(f"PROBE_STEP build_done t={time.time()-t0:.1f}s", flush=True)
+        num_envs=num_envs, device="cuda:0", visualize=False, record_video=False)
+    print(f"PROBE_STEP build_done num_envs={num_envs} t={time.time()-t0:.1f}s",
+          flush=True)
 
     env.set_mode(1)  # EnvMode.TEST
 
     import numpy as np
-    a = torch.zeros([1, 29], dtype=torch.float32, device="cuda:0")
+    a = torch.zeros([num_envs, 29], dtype=torch.float32, device="cuda:0")
 
     n = 40
     times = []
