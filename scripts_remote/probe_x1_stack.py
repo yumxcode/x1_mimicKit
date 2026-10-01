@@ -9,11 +9,45 @@ Stages (each prints PROBE[n] PASS/FAIL + a one-line reason):
 
 Exit code 0 iff all PASS.
 """
+import glob
 import os
 import subprocess
 import sys
 
-REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+def find_repo_root():
+    """Locate the x1_mimicKit repo root robustly.
+
+    gm-run may copy/execute this script from /workspace or the script's own
+    directory, so __file__-relative paths can be wrong. Search upward for a
+    dir containing both mimickit/ and tools/, then scan /workspace/*.
+    """
+    starts = []
+    try:
+        starts.append(os.path.dirname(os.path.abspath(__file__)))
+    except Exception:
+        pass
+    starts.append(os.getcwd())
+    for start in starts:
+        d = start
+        for _ in range(6):
+            if (os.path.isdir(os.path.join(d, "mimickit"))
+                    and os.path.isdir(os.path.join(d, "tools"))):
+                return d
+            parent = os.path.dirname(d)
+            if parent == d:
+                break
+            d = parent
+    for d in sorted(glob.glob("/workspace/*")) + ["/workspace"]:
+        if (os.path.isdir(os.path.join(d, "mimickit"))
+                and os.path.isdir(os.path.join(d, "tools"))):
+            return d
+    raise RuntimeError("x1_mimicKit repo root not found from "
+                       + repr(starts))
+
+
+REPO = find_repo_root()
+print(f"[probe] repo root: {REPO}", flush=True)
 os.chdir(REPO)
 sys.path.insert(0, os.path.join(REPO, "mimickit"))
 sys.path.insert(0, REPO)
