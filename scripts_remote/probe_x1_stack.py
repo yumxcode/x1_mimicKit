@@ -125,7 +125,7 @@ def s3_engine_view_motion():
         capture_output=True, text=True, timeout=900)
     conv_out = r0.stdout + r0.stderr
     keep = [l for l in conv_out.splitlines()
-            if ("CONVERT" in l or "Error" in l or "error" in l
+            if ("CONVERT" in l or "USD" in l or "Error" in l or "error" in l
                 or "Traceback" in l or 'File "' in l)]
     print("[probe] convert tail: " + " | ".join(keep[-10:]), flush=True)
     if r0.returncode != 0:

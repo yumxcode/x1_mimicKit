@@ -115,16 +115,21 @@ try:
         return n_rb, n_joint, n_art
 
     def _dump(stage, max_n=45):
-        lines = []
-        for prim in stage.Traverse():
-            vs = prim.GetVariantSets().GetNames()
-            extra = f" V={vs}" if vs else ""
-            apis = prim.GetAppliedSchemas()[:4]
-            lines.append(f"{prim.GetPath()}[{prim.GetTypeName()}]{extra}"
-                         f"{apis}")
-            if len(lines) >= max_n:
-                break
-        print("USD_DUMP " + " ;; ".join(lines), flush=True)
+        from collections import Counter
+        types = Counter(prim.GetTypeName() for prim in stage.Traverse())
+        top = " ".join(f"{k}:{v}" for k, v in types.most_common(12))
+        dp = stage.GetDefaultPrim()
+        root_layer = stage.GetRootLayer()
+        sublayers = root_layer.subLayerPaths
+        head = ""
+        try:
+            with open(target, errors="ignore") as f:
+                head = f.read(1200).replace("\n", " ")[:1200]
+        except Exception:
+            pass
+        print(f"CONVERT_DUMP types[{top}] default={dp.GetPath() if dp else None}"
+              f" sublayers={list(sublayers)[:4]}", flush=True)
+        print(f"CONVERT_HEAD {head}", flush=True)
 
     def _count_file(path):
         st = Usd.Stage.Open(path)
