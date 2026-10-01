@@ -71,16 +71,20 @@ def main():
     import numpy as np
     a = torch.zeros([num_envs, 29], dtype=torch.float32, device="cuda:0")
 
-    n = 40
+    n = int(os.environ.get("PROBE_STEPS", "300"))
     times = []
+    n_done = 0
     for i in range(n):
         t1 = time.time()
         obs, reward, done, info = env.step(a)
         dt = time.time() - t1
         times.append(dt)
-        if i % 5 == 0 or i == n - 1:
-            print(f"PROBE_STEP i={i} dt={dt:.3f}s "
-                  f"mean={np.mean(times):.3f}s obs0={float(obs[0,0]):.3f}",
+        n_done += int((done != 0).sum().item())
+        if i % 25 == 0 or i == n - 1:
+            env_time = env.get_env_time()
+            print(f"PROBE_STEP i={i} dt={dt:.3f}s mean={np.mean(times):.3f}s "
+                  f"obs0={float(obs[0,0]):.3f} done_total={n_done} "
+                  f"env_time={float(env_time):.2f}",
                   flush=True)
 
     print(f"PROBE_STEP done mean_dt={np.mean(times):.3f}s "
