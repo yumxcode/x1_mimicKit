@@ -1,6 +1,7 @@
 --mode test
 --num_envs 4
 --visualize false
+--test_episodes 1
 
 --engine_config data/engines/isaac_lab_engine.yaml
 --env_config data/envs/view_motion_x1_probe_env.yaml
