@@ -109,11 +109,11 @@ try:
         os.makedirs(os.path.dirname(target), exist_ok=True)
         shutil.copy2(out_path, target)
 
-    # ---- inspect: report physics content of the produced USD
-    try:
-        from pxr import Usd, UsdPhysics
-        stage = Usd.Stage.Open(target)
-        dp = stage.GetDefaultPrim()
+    # ---- inspect: find the physics variant that actually has bodies,
+    # author that selection (importers disagree on which variant to pick)
+    from pxr import Usd, UsdPhysics
+
+    def _count_physics(stage):
         n_rb = n_joint = n_art = 0
         for prim in stage.Traverse():
             if prim.HasAPI(UsdPhysics.RigidBodyAPI):
@@ -122,19 +122,30 @@ try:
                 n_joint += 1
             if prim.HasAPI(UsdPhysics.ArticulationRootAPI):
                 n_art += 1
-        variant_info = ""
-        if dp:
-            vs = dp.GetVariantSets()
-            names = vs.GetNames()
-            if "Physics" in names:
-                v = vs.GetVariantSet("Physics")
-                variant_info = (f" physics_variants={v.GetVariantNames()}"
-                                f" selected={v.GetVariantSelection()}")
-        print(f"CONVERT_INSPECT default_prim={dp.GetPath() if dp else None}"
-              f" rigid_bodies={n_rb} joints={n_joint} articulation_roots={n_art}"
-              f"{variant_info}", flush=True)
-    except Exception:
-        traceback.print_exc()
+        return n_rb, n_joint, n_art
+
+    stage = Usd.Stage.Open(target)
+    dp = stage.GetDefaultPrim()
+    chosen = None
+    stats = {}
+    if dp and "Physics" in dp.GetVariantSets().GetNames():
+        vset = dp.GetVariantSets().GetVariantSet("Physics")
+        original = vset.GetVariantSelection()
+        for name in vset.GetVariantNames():
+            vset.SetVariantSelection(name)
+            stats[name] = _count_physics(stage)
+            if chosen is None and stats[name][0] >= 30 and stats[name][1] >= 29:
+                chosen = name
+        vset.SetVariantSelection(chosen if chosen else original)
+        stage.GetRootLayer().Save()
+    n_rb, n_joint, n_art = _count_physics(stage)
+    print(f"CONVERT_INSPECT default_prim={dp.GetPath() if dp else None}"
+          f" variants={stats} chosen={chosen}"
+          f" rigid_bodies={n_rb} joints={n_joint} articulation_roots={n_art}",
+          flush=True)
+    if n_rb < 30 or n_joint < 29:
+        raise RuntimeError(
+            f"converted USD has no usable physics variant: {stats}")
 
     print("CONVERT_DONE", target, flush=True)
     app.close()
