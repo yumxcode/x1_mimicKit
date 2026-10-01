@@ -64,17 +64,30 @@ try:
     if cfg_cls is None:
         raise ImportError("MjcfConverterCfg not found in isaaclab.sim.converters")
 
-    kwargs = dict(
+    base_kwargs = dict(
         asset_path=os.path.join(repo, "data/assets/x1/x1.xml"),
         usd_dir=os.path.join(repo, "data/assets/x1"),
         usd_file_name="x1.usd",
         fix_base=False,
         merge_fixed_joints=False,
+        joint_drive=True,
     )
-    try:
-        cfg = cfg_cls(**kwargs, joint_drive=True)
-    except TypeError:
-        cfg = cfg_cls(**kwargs)
+
+    def make_cfg():
+        # newer configs dropped some kwargs; degrade one at a time
+        optional = ["joint_drive", "merge_fixed_joints", "fix_base",
+                    "parse_mjcf", "create_particle_system"]
+        for drop in range(len(optional) + 1):
+            kw = dict(base_kwargs)
+            for k in optional[:drop]:
+                kw.pop(k, None)
+            try:
+                return cfg_cls(**kw)
+            except TypeError:
+                continue
+        raise TypeError("MjcfConverterCfg accepts none of the tried kwargs")
+
+    cfg = make_cfg()
 
     converter = conv_cls(cfg)
     converter.convert()
