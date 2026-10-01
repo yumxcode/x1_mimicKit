@@ -138,10 +138,12 @@ def s3_engine_view_motion():
          "args/view_motion_x1_args.txt", "--num_envs", "4"],
         capture_output=True, text=True, timeout=1200)
     out = r.stdout + r.stderr
-    tail = out.strip().splitlines()[-3:]
-    assert r.returncode == 0, "run.py exit " + str(r.returncode) + ": " + " | ".join(tail)
-    assert "Mean Episode Length" in out, \
-        "view_motion did not complete (no Mean Episode Length): " + " | ".join(tail)
+    lines = out.strip().splitlines()
+    keep = [l for l in lines[-80:] if (
+        'File "' in l or "Error" in l or "error" in l or "^" in l
+        or l.strip().startswith("raise"))]
+    assert r.returncode == 0 and "Mean Episode Length" in out, \
+        "view_motion failed: " + " | ".join(keep[-25:])
     return "view_motion num_envs=4 completed"
 
 
