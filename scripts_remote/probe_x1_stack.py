@@ -92,6 +92,14 @@ def s1_char_model():
 def s2_tinymdm():
     import yaml
 
+    r0 = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "-q",
+         "diffusers>=0.36.0"],
+        capture_output=True, text=True, timeout=900)
+    if r0.returncode != 0:
+        raise RuntimeError("pip install diffusers failed: "
+                           + (r0.stdout + r0.stderr)[-300:])
+
     with open("tools/diffusion_model/config/tinymdm_x1_multi_clip.yaml") as f:
         cfg = yaml.safe_load(f)
     cfg["num_iterations"] = 30
@@ -117,7 +125,9 @@ def s3_engine_view_motion():
     out = r.stdout + r.stderr
     tail = out.strip().splitlines()[-3:]
     assert r.returncode == 0, "run.py exit " + str(r.returncode) + ": " + " | ".join(tail)
-    return "view_motion OK: " + " | ".join(tail[-1:])
+    assert "Mean Episode Length" in out, \
+        "view_motion did not complete (no Mean Episode Length): " + " | ".join(tail)
+    return "view_motion completed"
 
 
 def main():
