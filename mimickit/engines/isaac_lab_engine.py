@@ -141,18 +141,28 @@ class IsaacLabEngine(engine.Engine):
                     dst = stage.DefinePrim(p, "Xform")
                     # internal reference: independent copy incl. physics
                     dst.GetReferences().AddInternalReference(source_prim_path)
-                    if positions is not None:
-                        xform = UsdGeom.Xformable(dst)
-                        xform.ClearXformOpOrder()
+                    if positions is None:
+                        continue
+                    xform = UsdGeom.Xformable(dst)
+                    # reuse existing ops from the reference (they may be
+                    # quatd while AddOrientOp defaults to quatf -> conflict)
+                    ops = {op.GetOpName(): op for op in xform.GetOrderedXformOps()}
+                    trans = ops.get("xformOp:translate")
+                    if trans is None:
                         trans = xform.AddTranslateOp()
-                        trans.Set(Gf.Vec3d(*[float(v) for v in positions[i]]))
-                        if orientations is not None:
-                            q = orientations[i]
-                            quat = Gf.Quatd(float(q[-1]),
-                                            Gf.Vec3d(float(q[0]), float(q[1]),
-                                                     float(q[2])))
+                    trans.Set(Gf.Vec3d(*[float(v) for v in positions[i]]))
+                    if orientations is not None:
+                        q = orientations[i]
+                        rot = ops.get("xformOp:orient")
+                        if rot is None:
                             rot = xform.AddOrientOp()
-                            rot.Set(quat)
+                        qd = Gf.Quatd(float(q[-1]),
+                                      Gf.Vec3d(float(q[0]), float(q[1]),
+                                               float(q[2])))
+                        if rot.GetAttr().GetTypeName() == "quatf":
+                            rot.Set(Gf.Quatf(qd))
+                        else:
+                            rot.Set(qd)
 
             def filter_collisions(self, physics_scene_path, prefix,
                                   prim_paths, global_paths=None):
