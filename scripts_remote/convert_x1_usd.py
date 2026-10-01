@@ -94,17 +94,24 @@ try:
         dp = st.GetDefaultPrim()
         if dp and "Physics" in dp.GetVariantSets().GetNames():
             vset = dp.GetVariantSets().GetVariantSet("Physics")
-            for name in vset.GetVariantNames():
+            names = vset.GetVariantNames()
+            order = [n for n in ("physx", "physics", "mujoco") if n in names]
+            order += [n for n in names if n not in order and n != "none"]
+            for name in order:
                 vset.SetVariantSelection(name)
                 rbs, jns, arts = count_on(st)
                 print(f"CONVERT_VARIANT {name}: ({rbs},{jns},{arts})", flush=True)
                 if rbs >= 30 and jns >= 29:
                     break
             else:
-                vset.SetVariantSelection("physx"
-                                         if "physx" in vset.GetVariantNames()
-                                         else vset.GetVariantNames()[-1])
+                raise RuntimeError("no physics variant with bodies")
             st.GetRootLayer().Save()
+            # FLATTEN: bake payloads+variants into one self-contained file
+            # so spawning/reference/instancing cannot drop the physics tree
+            flat_tmp = target + ".flat.usda"
+            st.Export(flat_tmp)
+            shutil.move(flat_tmp, target)
+            st = Usd.Stage.Open(target)
         return count_on(st), st
 
     base_kwargs = dict(
