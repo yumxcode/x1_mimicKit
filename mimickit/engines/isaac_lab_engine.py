@@ -578,22 +578,32 @@ class IsaacLabEngine(engine.Engine):
         return torque_lim.cpu().numpy()
     
     def get_obj_dof_limits(self, env_id, obj_id):
+        import torch
         obj = self._objs[obj_id]
         dof_limits = obj.root_physx_view.get_dof_limits()[env_id]
+        # newer IsaacLab returns warp arrays; convert before torch indexing
+        if (not isinstance(dof_limits, torch.Tensor)):
+            dof_limits = torch.as_tensor(np.asarray(dof_limits),
+                                         device=self._device)
         dof_low = dof_limits[:, 0]
         dof_high = dof_limits[:, 1]
 
-        dof_order_sim2common = self._dof_order_sim2common[obj_id].cpu()
+        dof_order_sim2common = self._dof_order_sim2common[obj_id]
         dof_low = dof_low[dof_order_sim2common]
         dof_high = dof_high[dof_order_sim2common]
 
-        return dof_low.numpy(), dof_high.numpy()
-    
+        return dof_low.detach().cpu().numpy(), dof_high.detach().cpu().numpy()
+
     def get_obj_pd_gains(self, env_id, obj_id):
+        import torch
         obj = self._objs[obj_id]
         actuator = obj.actuators["actuators"]
         kp = actuator.stiffness[env_id]
         kd = actuator.damping[env_id]
+        if (not isinstance(kp, torch.Tensor)):
+            kp = torch.as_tensor(np.asarray(kp), device=self._device)
+        if (not isinstance(kd, torch.Tensor)):
+            kd = torch.as_tensor(np.asarray(kd), device=self._device)
 
         dof_order_sim2common = self._dof_order_sim2common[obj_id]
         kp = kp[dof_order_sim2common]
