@@ -90,8 +90,25 @@ try:
     cfg = make_cfg()
 
     converter = conv_cls(cfg)
-    converter.convert()
-    print("CONVERT_DONE", converter.usd_path, flush=True)
+    # newer converters run on construction / first usd_path access
+    out_path = converter.usd_path
+    if not os.path.isfile(out_path):
+        # some versions convert lazily via a method
+        for meth in ("convert", "run", "__call__"):
+            if hasattr(converter, meth) and callable(getattr(converter, meth)):
+                getattr(converter, meth)()
+                break
+        out_path = converter.usd_path
+
+    if not os.path.isfile(out_path):
+        raise FileNotFoundError(f"converter produced no USD at {out_path}")
+
+    target = os.path.join(repo, "data/assets/x1/x1.usd")
+    if os.path.abspath(out_path) != os.path.abspath(target):
+        import shutil
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.copy2(out_path, target)
+    print("CONVERT_DONE", target, flush=True)
     app.close()
 except Exception:
     traceback.print_exc()
