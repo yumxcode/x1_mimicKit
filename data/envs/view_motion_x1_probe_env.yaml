@@ -1,0 +1,12 @@
+env_name: "view_motion"
+
+char_file: "data/assets/x1/x1.xml"
+camera_mode: "track"
+
+episode_length: 3.0 # seconds (probe: short)
+global_obs: False
+root_height_obs: True
+
+key_bodies: ["left_ankle_roll_link", "right_ankle_roll_link", "left_wrist_roll_link", "right_wrist_roll_link"]
+
+motion_file: "data/motions/x1_v3/x1_run1_subject5_seg0.pkl"

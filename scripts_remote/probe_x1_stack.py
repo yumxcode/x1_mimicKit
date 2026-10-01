@@ -132,12 +132,25 @@ def s3_engine_view_motion():
         raise RuntimeError("mjcf->usd convert failed: " + " | ".join(keep[-14:]))
 
     # multi-env run to exercise _build_envs cloning, _clone_obj_prim
-    # positions/orientations and inter-env collision filtering
-    r = subprocess.run(
-        [sys.executable, "mimickit/run.py", "--arg_file",
-         "args/view_motion_x1_args.txt", "--num_envs", "4"],
-        capture_output=True, text=True, timeout=1200)
-    out = r.stdout + r.stderr
+    # positions/orientations and inter-env collision filtering.
+    # Short 3 s episode (probe env) + output to file so progress survives
+    # subprocess timeouts.
+    os.makedirs("output", exist_ok=True)
+    vm_log = "output/view_motion_probe.log"
+    with open(vm_log, "w") as lf:
+        try:
+            r = subprocess.run(
+                [sys.executable, "mimickit/run.py", "--arg_file",
+                 "args/view_motion_x1_probe_args.txt"],
+                stdout=lf, stderr=subprocess.STDOUT, timeout=2400)
+        except subprocess.TimeoutExpired:
+            out = open(vm_log, errors="ignore").read()
+            lines = out.strip().splitlines()
+            keep = [l for l in lines[-80:] if (
+                'File "' in l or "Error" in l or "Time" in l)]
+            raise RuntimeError("view_motion timed out after 2400s; "
+                               "log tail: " + " | ".join(keep[-20:]))
+    out = open(vm_log, errors="ignore").read()
     lines = out.strip().splitlines()
     keep = [l for l in lines[-80:] if (
         'File "' in l or "Error" in l or "error" in l or "^" in l
