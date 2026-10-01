@@ -114,21 +114,60 @@ class IsaacLabEngine(engine.Engine):
         self._obj_cfgs.append([])
         return env_id
     
-    def initialize_sim(self):
+    def _build_cloner(self):
+        """Return a cloner object supporting .clone(source_prim_path,
+        prim_paths, replicate_physics, copy_from_source) and
+        .filter_collisions(scene_path, prefix, prim_paths, global_paths).
+
+        Prefers the classic isaacsim Cloner; falls back to a USD internal
+        reference cloner + the new isaaclab.cloner.filter_collisions for
+        IsaacLab >= 6.x where the Cloner class no longer exists.
+        """
         try:
             from isaacsim.core.cloner import Cloner
-        except ImportError:
             try:
-                from isaaclab.utils.cloner import Cloner  # IsaacLab >= 2.x
-            except ImportError:
-                from isaaclab.cloner import Cloner  # newer layout
+                return Cloner(self._stage)
+            except TypeError:
+                return Cloner()
+        except ImportError:
+            pass
+
+        engine_self = self
+
+        class _USDRefCloner:
+            def clone(self, source_prim_path, prim_paths,
+                      replicate_physics=False, copy_from_source=True):
+                stage = engine_self._stage
+                for p in prim_paths:
+                    dst = stage.DefinePrim(p, "Xform")
+                    # internal reference: independent copy incl. physics
+                    dst.GetReferences().AddInternalReference(source_prim_path)
+
+            def filter_collisions(self, physics_scene_path, prefix,
+                                  prim_paths, global_paths=None):
+                try:
+                    from isaaclab.cloner import (
+                        filter_collisions as _fc)
+                except ImportError:
+                    Logger.print("[isaac_lab_engine] no filter_collisions "
+                                 "available; envs must be spaced apart")
+                    return
+                try:
+                    # new signature: (stage, physicsscene_path,
+                    #                collision_root_path, prim_paths, ...)
+                    _fc(engine_self._stage, physics_scene_path, prefix,
+                        prim_paths, global_paths=global_paths or [])
+                except TypeError:
+                    # legacy signature without stage
+                    _fc(physics_scene_path, prefix, prim_paths,
+                        global_paths=global_paths or [])
+
+        return _USDRefCloner()
+
+    def initialize_sim(self):
+        self._cloner = self._build_cloner()
 
         self._validate_envs()
-        try:
-            self._cloner = Cloner(self._stage)
-        except TypeError:
-            self._cloner = Cloner()  # newer isaaclab Cloner takes no stage
-
         self._build_envs()
         self._build_objs()
         self._build_ground_contact_sensors()
