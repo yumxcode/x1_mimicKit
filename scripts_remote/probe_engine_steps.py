@@ -82,9 +82,10 @@ def main():
         n_done += int((done != 0).sum().item())
         if i % 25 == 0 or i == n - 1:
             env_time = env.get_env_time()
+            t0v = float(env_time.flatten()[0]) if hasattr(env_time, "flatten") else float(env_time)
             print(f"PROBE_STEP i={i} dt={dt:.3f}s mean={np.mean(times):.3f}s "
                   f"obs0={float(obs[0,0]):.3f} done_total={n_done} "
-                  f"env_time={float(env_time):.2f}",
+                  f"env_time0={t0v:.2f}",
                   flush=True)
 
     print(f"PROBE_STEP done mean_dt={np.mean(times):.3f}s "
