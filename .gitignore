@@ -5,3 +5,8 @@ __pycache__/
 output/
 .vscode/
 wandb/
+.venv/
+.meta-agent/
+.research/
+# LAFAN1 G1 sources (87MB raw, reproducible via reconstruct/cut from HF; training only needs the pkls)
+data/LAFAN1_g1/

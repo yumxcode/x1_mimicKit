@@ -1,2 +1,4 @@
 *
 !.gitignore
+!x1
+!x1/**
