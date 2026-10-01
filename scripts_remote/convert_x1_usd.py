@@ -114,6 +114,18 @@ try:
                 n_art += 1
         return n_rb, n_joint, n_art
 
+    def _dump(stage, max_n=45):
+        lines = []
+        for prim in stage.Traverse():
+            vs = prim.GetVariantSets().GetNames()
+            extra = f" V={vs}" if vs else ""
+            apis = prim.GetAppliedSchemas()[:4]
+            lines.append(f"{prim.GetPath()}[{prim.GetTypeName()}]{extra}"
+                         f"{apis}")
+            if len(lines) >= max_n:
+                break
+        print("USD_DUMP " + " ;; ".join(lines), flush=True)
+
     def _count_file(path):
         st = Usd.Stage.Open(path)
         return _count_on(st) + (st,)
@@ -143,6 +155,8 @@ try:
             n_rb, n_joint, n_art, stage = _count_file(target)
             print(f"CONVERT_TRY mode={mode} -> rigid_bodies={n_rb} "
                   f"joints={n_joint} articulation_roots={n_art}", flush=True)
+            if n_rb < 30 or n_joint < 29:
+                _dump(stage)
             if n_rb >= 30 and n_joint >= 29:
                 break
 
@@ -221,6 +235,21 @@ try:
             efforts[m.attrib["joint"]] = float(m.attrib["gear"])
 
         stage = Usd.Stage.Open(target)
+        _dump(stage)
+
+        # select the physics variant if present (URDF importer too)
+        dp = stage.GetDefaultPrim()
+        if dp and "Physics" in dp.GetVariantSets().GetNames():
+            vset = dp.GetVariantSets().GetVariantSet("Physics")
+            for name in vset.GetVariantNames():
+                vset.SetVariantSelection(name)
+                rbs, jns, arts = _count_on(stage)
+                print(f"CONVERT_URDF_VARIANT {name}: ({rbs},{jns},{arts})",
+                      flush=True)
+                if rbs >= 30 and jns >= 29:
+                    break
+            stage.GetRootLayer().Save()
+
         n_set = 0
         for prim in stage.Traverse():
             if prim.IsA(UsdPhysics.RevoluteJoint):
@@ -240,8 +269,6 @@ try:
         if n_rb < 30 or n_joint < 29 or n_set < 29:
             raise RuntimeError("URDF fallback also lacks physics "
                                f"({n_rb},{n_joint},{n_set})")
-    app.close()
-
     print("CONVERT_DONE", target, flush=True)
     app.close()
 except Exception:
