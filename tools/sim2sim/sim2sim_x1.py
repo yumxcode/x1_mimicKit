@@ -124,7 +124,7 @@ def actor_forward(policy, obs):
     for i, (W, b) in enumerate(policy["actor_ops"]):
         h = h @ W.T + b
         if i < n - 1:
-            h = np.relu(h)  # MimicKit fc nets use ReLU (base_model default)
+            h = np.maximum(h, 0.0)  # ReLU (MimicKit base_model default)
     return h
 
 
@@ -153,7 +153,7 @@ def parse_x1_xml():
                 name=j.attrib["name"],
                 axis=np.fromstring(j.attrib.get("axis", "0 0 1"), sep=" "),
                 range=np.fromstring(j.attrib.get("range", "-3.15 3.15"),
-                                    sep=float),
+                                    sep=" "),
                 kp=float(j.attrib.get("stiffness", 0)),
                 kd=float(j.attrib.get("damping", 0)),
             ))
@@ -347,6 +347,11 @@ def run_sim2sim(args):
 
     fallen = False
     foot_bodies = {sim.foot_bids["left"], sim.foot_bids["right"]}
+    # ankle chain bodies are part of the feet (ankle origin sits ~5 cm up)
+    ankle_bodies = set()
+    for s in ("left", "right"):
+        ankle_bodies.add(sim.m.body(f"{s}_ankle_roll_link").id)
+        ankle_bodies.add(sim.m.body(f"{s}_ankle_pitch_link").id)
     for step in range(n_steps):
         obs = sim.build_obs()
         norm_obs = normalize(policy, obs, "obs")
@@ -377,9 +382,10 @@ def run_sim2sim(args):
         nonfoot_contact = False
         for bid in range(sim.m.nbody):
             name = mujoco.mj_id2name(sim.m, mujoco.mjtObj.mjOBJ_BODY, bid)
-            if not name or name == "world" or bid in foot_bodies:
+            if (not name or name == "world" or bid in foot_bodies
+                    or bid in ankle_bodies or bid == sim.base_bid):
                 continue
-            if sim.d.xpos[bid][2] < 0.06 and bid != sim.base_bid:
+            if sim.d.xpos[bid][2] < 0.05:
                 nonfoot_contact = True
                 break
         if (nonfoot_contact or root_pos[2] < 0.35
