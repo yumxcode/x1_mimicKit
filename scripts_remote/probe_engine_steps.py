@@ -45,6 +45,15 @@ def main():
     sys.path.insert(0, repo)
     print(f"[stepprobe] repo: {repo}", flush=True)
 
+    # ensure the IsaacLab USD asset exists (MJCF -> USD conversion)
+    import subprocess
+    usd = os.path.join(repo, "data/assets/x1/x1.usd")
+    if not os.path.exists(usd):
+        r0 = subprocess.run([sys.executable, "scripts_remote/convert_x1_usd.py"])
+        if r0.returncode != 0 or not os.path.exists(usd):
+            print("PROBE_STEP_RESULT: FAIL (convert)", flush=True)
+            sys.exit(1)
+
     import torch
     import envs.env_builder as env_builder
 
