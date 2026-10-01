@@ -15,6 +15,15 @@ import util.torch_util as torch_util
 ROT_WXYZ_TO_XYZW = [1, 2, 3, 0]
 ROT_XYZW_TO_WXYZ = [3, 0, 1, 2]
 
+
+def _to_torch(x, device=None):
+    """Convert warp/numpy arrays returned by newer IsaacLab to torch."""
+    if isinstance(x, torch.Tensor):
+        return x
+    return torch.as_tensor(np.asarray(x),
+                           device=device if device is not None else "cpu")
+
+
 ENV_PATH_TEMPLATE = "/World/envs/env_{}"
 OBJ_PATH_TEMPLATE = "/World/envs/env_{}/obj_{}"
 GROUND_PATH = "/World/ground"
@@ -340,7 +349,7 @@ class IsaacLabEngine(engine.Engine):
     
     def get_dof_pos(self, obj_id):
         obj = self._objs[obj_id]
-        dof_pos = obj.data.joint_pos
+        dof_pos = _to_torch(obj.data.joint_pos, self._device)
 
         dof_order_sim2common = self._dof_order_sim2common[obj_id]
         dof_pos = dof_pos[:, dof_order_sim2common]
@@ -348,7 +357,7 @@ class IsaacLabEngine(engine.Engine):
     
     def get_dof_vel(self, obj_id):
         obj = self._objs[obj_id]
-        dof_vel = obj.data.joint_vel
+        dof_vel = _to_torch(obj.data.joint_vel, self._device)
 
         dof_order_sim2common = self._dof_order_sim2common[obj_id]
         dof_vel = dof_vel[:, dof_order_sim2common]
@@ -356,7 +365,7 @@ class IsaacLabEngine(engine.Engine):
     
     def get_dof_forces(self, obj_id):
         obj = self._objs[obj_id]
-        dof_forces = obj.data.applied_torque
+        dof_forces = _to_torch(obj.data.applied_torque, self._device)
 
         dof_order_sim2common = self._dof_order_sim2common[obj_id]
         dof_forces = dof_forces[:, dof_order_sim2common]
@@ -571,20 +580,17 @@ class IsaacLabEngine(engine.Engine):
     
     def get_obj_torque_limits(self, env_id, obj_id):
         obj = self._objs[obj_id]
-        torque_lim = obj.root_physx_view.get_dof_max_forces()[env_id]
+        torque_lim = _to_torch(obj.root_physx_view.get_dof_max_forces()[env_id],
+                               self._device)
 
-        dof_order_sim2common = self._dof_order_sim2common[obj_id].cpu()
+        dof_order_sim2common = self._dof_order_sim2common[obj_id]
         torque_lim = torque_lim[dof_order_sim2common]
-        return torque_lim.cpu().numpy()
+        return torque_lim.detach().cpu().numpy()
     
     def get_obj_dof_limits(self, env_id, obj_id):
-        import torch
         obj = self._objs[obj_id]
-        dof_limits = obj.root_physx_view.get_dof_limits()[env_id]
-        # newer IsaacLab returns warp arrays; convert before torch indexing
-        if (not isinstance(dof_limits, torch.Tensor)):
-            dof_limits = torch.as_tensor(np.asarray(dof_limits),
-                                         device=self._device)
+        dof_limits = _to_torch(obj.root_physx_view.get_dof_limits()[env_id],
+                               self._device)
         dof_low = dof_limits[:, 0]
         dof_high = dof_limits[:, 1]
 
@@ -595,15 +601,10 @@ class IsaacLabEngine(engine.Engine):
         return dof_low.detach().cpu().numpy(), dof_high.detach().cpu().numpy()
 
     def get_obj_pd_gains(self, env_id, obj_id):
-        import torch
         obj = self._objs[obj_id]
         actuator = obj.actuators["actuators"]
-        kp = actuator.stiffness[env_id]
-        kd = actuator.damping[env_id]
-        if (not isinstance(kp, torch.Tensor)):
-            kp = torch.as_tensor(np.asarray(kp), device=self._device)
-        if (not isinstance(kd, torch.Tensor)):
-            kd = torch.as_tensor(np.asarray(kd), device=self._device)
+        kp = _to_torch(actuator.stiffness[env_id], self._device)
+        kd = _to_torch(actuator.damping[env_id], self._device)
 
         dof_order_sim2common = self._dof_order_sim2common[obj_id]
         kp = kp[dof_order_sim2common]
@@ -650,7 +651,7 @@ class IsaacLabEngine(engine.Engine):
     
     def calc_obj_mass(self, env_id, obj_id):
         obj = self._objs[obj_id]
-        masses = obj.root_physx_view.get_masses()[env_id]
+        masses = _to_torch(obj.root_physx_view.get_masses()[env_id])
         total_mass = masses.sum().item()
         return total_mass
     
