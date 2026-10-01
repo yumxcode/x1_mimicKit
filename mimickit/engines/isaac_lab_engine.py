@@ -731,13 +731,31 @@ class IsaacLabEngine(engine.Engine):
         
         sim_cfg = sim_utils.SimulationCfg(device=self._device, dt=sim_timestep,
                                           render_interval=self._sim_steps)
-        
-        sim_cfg.physx.bounce_threshold_velocity = 0.2
-        sim_cfg.physx.max_position_iteration_count = 4
-        sim_cfg.physx.max_velocity_iteration_count = 0
-        sim_cfg.physx.gpu_max_rigid_contact_count = 8 * 1024 * 1024
-        sim_cfg.physics_material.static_friction = 1.0
-        sim_cfg.physics_material.dynamic_friction = 1.0
+
+        def _try_set(obj, name, value, label):
+            try:
+                setattr(obj, name, value)
+            except Exception as e:
+                Logger.print("[isaac_lab_engine] could not set {}: {}".format(label, e))
+
+        # physx settings: schema location differs across IsaacLab versions
+        physx = getattr(sim_cfg, "physx", None)
+        if (physx is None):
+            try:
+                physx = sim_utils.PhysxCfg()
+                _try_set(sim_cfg, "physx", physx, "SimulationCfg.physx")
+            except Exception:
+                physx = None
+        if (physx is not None):
+            _try_set(physx, "bounce_threshold_velocity", 0.2, "physx.bounce_threshold_velocity")
+            _try_set(physx, "max_position_iteration_count", 4, "physx.max_position_iteration_count")
+            _try_set(physx, "max_velocity_iteration_count", 0, "physx.max_velocity_iteration_count")
+            _try_set(physx, "gpu_max_rigid_contact_count", 8 * 1024 * 1024, "physx.gpu_max_rigid_contact_count")
+
+        mat = getattr(sim_cfg, "physics_material", None)
+        if (mat is not None):
+            _try_set(mat, "static_friction", 1.0, "physics_material.static_friction")
+            _try_set(mat, "dynamic_friction", 1.0, "physics_material.dynamic_friction")
         
         self._sim = sim_utils.SimulationContext(sim_cfg)
         self._stage = get_current_stage()
