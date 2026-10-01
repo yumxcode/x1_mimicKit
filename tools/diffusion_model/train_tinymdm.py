@@ -1,5 +1,10 @@
 import sys
-sys.path.append("mimickit")
+import os
+# resolve repo root relative to this file so the script works from any cwd
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, _REPO_ROOT)
+sys.path.insert(0, os.path.join(_REPO_ROOT, "mimickit"))
+os.chdir(_REPO_ROOT)  # configs use repo-root-relative paths
 
 from argparse import ArgumentParser
 import numpy as np
