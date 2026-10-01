@@ -115,10 +115,19 @@ class IsaacLabEngine(engine.Engine):
         return env_id
     
     def initialize_sim(self):
-        from isaacsim.core.cloner import Cloner
+        try:
+            from isaacsim.core.cloner import Cloner
+        except ImportError:
+            try:
+                from isaaclab.utils.cloner import Cloner  # IsaacLab >= 2.x
+            except ImportError:
+                from isaaclab.cloner import Cloner  # newer layout
 
         self._validate_envs()
-        self._cloner = Cloner(self._stage)
+        try:
+            self._cloner = Cloner(self._stage)
+        except TypeError:
+            self._cloner = Cloner()  # newer isaaclab Cloner takes no stage
 
         self._build_envs()
         self._build_objs()
@@ -661,7 +670,10 @@ class IsaacLabEngine(engine.Engine):
     
     def _build_lights(self):
         import isaaclab.sim as sim_utils
-        import isaacsim.core.utils.prims as prim_utils
+        try:
+            import isaacsim.core.utils.prims as prim_utils
+        except ImportError:
+            import isaaclab.utils.prims as prim_utils  # IsaacLab >= 2.x
         from pxr import Gf
 
         light_quat = torch_util.euler_xyz_to_quat(torch.tensor(0.7),
@@ -711,7 +723,11 @@ class IsaacLabEngine(engine.Engine):
         })
         
         import isaaclab.sim as sim_utils
-        from isaacsim.core.utils.stage import get_current_stage
+        try:
+            from isaacsim.core.utils.stage import get_current_stage
+        except ImportError:
+            # IsaacLab >= 2.x: isaacsim.core moved; use omni.usd / sim stage
+            get_current_stage = lambda: self._sim.stage  # noqa: E731
         
         sim_cfg = sim_utils.SimulationCfg(device=self._device, dt=sim_timestep,
                                           render_interval=self._sim_steps)
