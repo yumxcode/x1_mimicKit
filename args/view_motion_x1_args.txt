@@ -1,0 +1,8 @@
+--mode test
+--num_envs 1
+--visualize false
+
+--engine_config data/engines/isaac_lab_engine.yaml
+--env_config data/envs/view_motion_x1_env.yaml
+
+--out_dir output/x1_view_motion
