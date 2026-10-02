@@ -84,48 +84,53 @@ def axis_angle_to_quat(axis, angle):
 
 
 def load_policy(model_path, device="cpu"):
-    """Rebuild actor MLP + normalizers from a MimicKit agent state_dict."""
+    """Rebuild actor MLP + action-dist head + normalizers from a MimicKit
+    agent state_dict.
+
+    Forward path (ppo_model.eval_actor):
+        h = actor_layers(obs)          # fc_2layers_1024units: [Linear1024,
+                                       #   ReLU, Linear512, ReLU]
+        norm_a_mean = action_dist._mean_net(h)   # Linear -> 29
+        a = a_norm.unnormalize(norm_a_mean)
+    """
     import torch
 
     sd = torch.load(model_path, map_location=device)
-    keys = list(sd.keys())
-    actor_keys = sorted(k for k in keys if k.startswith("_model._actor_layers"))
-    a_norm_prefix = "_a_norm."
-    obs_norm_prefix = "_obs_norm."
-
-    out = {"raw": sd}
 
     def get(pfx, name):
         return sd[pfx + name].numpy().astype(np.float64)
 
-    out["obs_mean"] = get(obs_norm_prefix, "_mean")
-    out["obs_std"] = get(obs_norm_prefix, "_std")
-    out["a_mean"] = get(a_norm_prefix, "_mean")
-    out["a_std"] = get(a_norm_prefix, "_std")
+    out = {"raw": sd}
+    out["obs_mean"] = get("_obs_norm.", "_mean")
+    out["obs_std"] = get("_obs_norm.", "_std")
+    out["a_mean"] = get("_a_norm.", "_mean")
+    out["a_std"] = get("_a_norm.", "_std")
 
-    # rebuild MLP: Linear layers named _model._actor_layers.{i}.weight/bias
+    # actor backbone: keys _model._actor_layers.{i}.{weight,bias}
     layers = {}
-    for k in actor_keys:
-        idx = int(k.split(".")[2])
-        kind = k.split(".")[-1]
-        layers.setdefault(idx, {})[kind] = sd[k].cpu().numpy()
-    weight_keys = sorted(layers.keys())
-    ops = []
-    for i in weight_keys:
-        W, b = layers[i]["weight"], layers[i]["bias"]
-        ops.append((W, b))
-    out["actor_ops"] = ops
+    for k in sd:
+        if k.startswith("_model._actor_layers."):
+            idx = int(k.split(".")[2])
+            layers.setdefault(idx, {})[k.split(".")[-1]] = sd[k].cpu().numpy()
+    out["actor_ops"] = [(layers[i]["weight"], layers[i]["bias"])
+                        for i in sorted(layers)]
+
+    # action-dist mean head: _model._action_dist._mean_net.{weight,bias}
+    W = sd["_model._action_dist._mean_net.weight"].cpu().numpy()
+    b = sd["_model._action_dist._mean_net.bias"].cpu().numpy()
+    out["head_op"] = (W, b)
     return out
 
 
 def actor_forward(policy, obs):
     h = obs
-    n = len(policy["actor_ops"])
-    for i, (W, b) in enumerate(policy["actor_ops"]):
+    ops = policy["actor_ops"]
+    for i, (W, b) in enumerate(ops):
         h = h @ W.T + b
-        if i < n - 1:
-            h = np.maximum(h, 0.0)  # ReLU (MimicKit base_model default)
-    return h
+        if i < len(ops) - 1:
+            h = np.maximum(h, 0.0)  # ReLU
+    W, b = policy["head_op"]
+    return h @ W.T + b  # normalized action mean
 
 
 def normalize(policy, obs, which="obs"):
