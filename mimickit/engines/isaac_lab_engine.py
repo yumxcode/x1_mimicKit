@@ -207,25 +207,11 @@ class IsaacLabEngine(engine.Engine):
         self._validate_envs()
         self._build_envs()
         self._build_objs()
+        self._build_ground_contact_sensors()
         self._filter_env_collisions()
 
         Logger.print("Initializing simulation...")
         self._sim.reset()
-
-        # contact sensors AFTER sim.reset(): the spawner's built-in
-        # activate_contact_sensors runs at spawn time when prim references
-        # are not yet resolved (no visible rigid bodies -> ValueError).
-        # IsaacLab 6.x ContactSensor resolves and reports on its own once
-        # the stage is live; the USD asset already authors
-        # PhysxContactReportAPI on every rigid body.
-        self._build_ground_contact_sensors()
-        for s in self._ground_contact_sensors:
-            if (s is not None and hasattr(s, "initialize")):
-                try:
-                    s.initialize()  # lazy PhysX view needs explicit init
-                except Exception as e:
-                    Logger.print("[isaac_lab_engine] contact sensor init "
-                                 "deferred: {}".format(e))
         
         self._build_body_order_tensors()
         self._build_sensor_order_tensors()
@@ -1238,14 +1224,22 @@ class IsaacLabEngine(engine.Engine):
         timestep = self.get_timestep()
 
         for obj_id in range(objs_per_env):
-            # Sensor over the object prim + descendants. The USD asset has
-            # PhysxContactReportAPI authored on every rigid body, so this
-            # matches all 30 links.
-            sensor_regex = OBJ_PATH_TEMPLATE.format(".*", obj_id) + ".*"
-            sensor_cfg = ContactSensorCfg(prim_path=sensor_regex,
-                                          update_period=timestep,
-                                          filter_prim_paths_expr=ground_prim_paths)
-            sensor = ContactSensor(sensor_cfg)
+            # find child primitive that contains ContactReportAPI (original
+            # proven behavior: matches base_link; forces are scattered into
+            # the full body layout in get_ground_contact_forces)
+            obj_path = OBJ_PATH_TEMPLATE.format(0, obj_id)
+            contact_prim_path = self._find_contact_prim_path(obj_path)
+
+            if (contact_prim_path is not None):
+                contact_prim_name = os.path.basename(contact_prim_path)
+                sensor_regex = OBJ_PATH_TEMPLATE.format(".*", obj_id) + "/{:s}/.*".format(contact_prim_name)
+
+                sensor_cfg = ContactSensorCfg(prim_path=sensor_regex, 
+                                              update_period=timestep,
+                                              filter_prim_paths_expr=ground_prim_paths)
+                sensor = ContactSensor(sensor_cfg)
+            else:
+                sensor = None
         
             self._ground_contact_sensors.append(sensor)
         return
