@@ -1212,7 +1212,9 @@ class IsaacLabEngine(engine.Engine):
             # that API on the articulation root only and the sensor then
             # covered every link; 6.x reports only the matched prim
             # (base_link), which breaks force indexing by body id.
-            sensor_regex = OBJ_PATH_TEMPLATE.format(".*", obj_id) + ".*"
+            # match the object prim and all bodies beneath it; body prims
+            # live one level below the articulation root
+            sensor_regex = OBJ_PATH_TEMPLATE.format(".*", obj_id) + "/.*"
             sensor_cfg = ContactSensorCfg(prim_path=sensor_regex,
                                           update_period=timestep,
                                           filter_prim_paths_expr=ground_prim_paths)
