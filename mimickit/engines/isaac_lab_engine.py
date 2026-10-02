@@ -1012,7 +1012,7 @@ class IsaacLabEngine(engine.Engine):
         usd_cfg = sim_utils.UsdFileCfg(usd_path=usd_asset_file, 
                                        visual_material=visual_material, 
                                        rigid_props=rigid_props,
-                                       activate_contact_sensors=True)
+                                       activate_contact_sensors=False)
         
         prim_path = OBJ_PATH_TEMPLATE.format(env_id, obj_id)
         init_state = RigidObjectCfg.InitialStateCfg(pos=obj_cfg.start_pos, rot=obj_cfg.start_rot)
@@ -1049,7 +1049,7 @@ class IsaacLabEngine(engine.Engine):
                                        visual_material=visual_material,
                                        articulation_props=articulation_props,
                                        rigid_props=rigid_props,
-                                       activate_contact_sensors=True)
+                                       activate_contact_sensors=False)
 
         if (obj_cfg.disable_motors):
             control_mode = engine.ControlMode.none
