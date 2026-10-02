@@ -430,22 +430,27 @@ class IsaacLabEngine(engine.Engine):
         return forces
     
     def get_ground_contact_forces(self, obj_id):
+        # IsaacLab 6.x contact sensors may report fewer bodies than the
+        # model's full body list (leaf-pattern + API matching resolves only
+        # a subset at spawn time). Scatter the reported columns into the
+        # engine's full body layout; bodies without a sensor read zero
+        # force (fall gating by body id stays consistent).
         sensor = self._ground_contact_sensors[obj_id]
         forces = _to_torch(sensor.data.force_matrix_w, self._device)
         if (forces.dim() == 4):
             forces = forces.sum(dim=-2)
 
-        body_order_sim2common = self._sensor_body_order_sim2common[obj_id]
-        n_bodies = int(body_order_sim2common.shape[0])
-        if (forces.shape[1] < n_bodies):
-            # sensor reports fewer bodies than the model expects; pad with
-            # zeros so contact gating by body id still works
-            pad = torch.zeros([forces.shape[0], n_bodies - forces.shape[1],
-                               forces.shape[2]],
-                              dtype=forces.dtype, device=forces.device)
-            forces = torch.cat([forces, pad], dim=1)
-        forces = forces[:, body_order_sim2common, :]
-        return forces
+        cols = self._sensor_body_cols[obj_id]
+        if (cols is None):
+            body_order_sim2common = self._sensor_body_order_sim2common[obj_id]
+            return forces[:, body_order_sim2common, :]
+
+        n_envs, n_sensor_bodies, dim = forces.shape
+        padded = torch.cat([forces,
+                            torch.zeros(n_envs, 1, dim,
+                                        dtype=forces.dtype,
+                                        device=forces.device)], dim=1)
+        return padded[:, cols, :]
     
     def set_root_pos(self, env_id, obj_id, root_pos):
         obj = self._objs[obj_id]
@@ -1019,7 +1024,7 @@ class IsaacLabEngine(engine.Engine):
         usd_cfg = sim_utils.UsdFileCfg(usd_path=usd_asset_file, 
                                        visual_material=visual_material, 
                                        rigid_props=rigid_props,
-                                       activate_contact_sensors=False)
+                                       activate_contact_sensors=True)
         
         prim_path = OBJ_PATH_TEMPLATE.format(env_id, obj_id)
         init_state = RigidObjectCfg.InitialStateCfg(pos=obj_cfg.start_pos, rot=obj_cfg.start_rot)
@@ -1056,7 +1061,7 @@ class IsaacLabEngine(engine.Engine):
                                        visual_material=visual_material,
                                        articulation_props=articulation_props,
                                        rigid_props=rigid_props,
-                                       activate_contact_sensors=False)
+                                       activate_contact_sensors=True)
 
         if (obj_cfg.disable_motors):
             control_mode = engine.ControlMode.none
@@ -1184,6 +1189,7 @@ class IsaacLabEngine(engine.Engine):
 
     def _build_sensor_order_tensors(self):
         self._sensor_body_order_sim2common = []
+        self._sensor_body_cols = []
 
         objs_per_env = self.get_objs_per_env()
         for obj_id in range(objs_per_env):
@@ -1197,11 +1203,22 @@ class IsaacLabEngine(engine.Engine):
 
                     body_sim2common = torch.tensor(body_sim2common, device=self._device, dtype=torch.long)
                     self._sensor_body_order_sim2common.append(body_sim2common)
+
+                    # full-body scatter map: engine body i -> sensor column,
+                    # or n_sensor_bodies (the zero pad column) when absent
+                    n_engine_bodies = int(self._body_order_sim2common[obj_id].shape[0])
+                    n_sensor = len(body_names)
+                    col_of = {eng: j for j, eng in enumerate(body_common2sim)}
+                    cols = [col_of.get(i, n_sensor) for i in range(n_engine_bodies)]
+                    self._sensor_body_cols.append(
+                        torch.tensor(cols, device=self._device, dtype=torch.long))
                 else:
                     body_sim2common = torch.tensor([0], device=self._device, dtype=torch.long)
                     self._sensor_body_order_sim2common.append(body_sim2common)
+                    self._sensor_body_cols.append(None)
             else:
                 self._sensor_body_order_sim2common.append(None)
+                self._sensor_body_cols.append(None)
         return
     
     def _build_ground_contact_sensors(self):
