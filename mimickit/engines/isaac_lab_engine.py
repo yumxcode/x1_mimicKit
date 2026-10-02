@@ -1012,7 +1012,7 @@ class IsaacLabEngine(engine.Engine):
         usd_cfg = sim_utils.UsdFileCfg(usd_path=usd_asset_file, 
                                        visual_material=visual_material, 
                                        rigid_props=rigid_props,
-                                       activate_contact_sensors=False)
+                                       activate_contact_sensors=True)
         
         prim_path = OBJ_PATH_TEMPLATE.format(env_id, obj_id)
         init_state = RigidObjectCfg.InitialStateCfg(pos=obj_cfg.start_pos, rot=obj_cfg.start_rot)
@@ -1049,7 +1049,7 @@ class IsaacLabEngine(engine.Engine):
                                        visual_material=visual_material,
                                        articulation_props=articulation_props,
                                        rigid_props=rigid_props,
-                                       activate_contact_sensors=False)
+                                       activate_contact_sensors=True)
 
         if (obj_cfg.disable_motors):
             control_mode = engine.ControlMode.none
@@ -1207,14 +1207,10 @@ class IsaacLabEngine(engine.Engine):
         timestep = self.get_timestep()
 
         for obj_id in range(objs_per_env):
-            # Sensor over the WHOLE object (all rigid bodies), not just the
-            # first prim with ContactReportAPI. Older IsaacLab ancestors set
-            # that API on the articulation root only and the sensor then
-            # covered every link; 6.x reports only the matched prim
-            # (base_link), which breaks force indexing by body id.
-            # match the object prim and all bodies beneath it; body prims
-            # live one level below the articulation root
-            sensor_regex = OBJ_PATH_TEMPLATE.format(".*", obj_id) + "/.*"
+            # Sensor over the object prim + descendants. The USD asset has
+            # PhysxContactReportAPI authored on every rigid body, so this
+            # matches all 30 links.
+            sensor_regex = OBJ_PATH_TEMPLATE.format(".*", obj_id) + ".*"
             sensor_cfg = ContactSensorCfg(prim_path=sensor_regex,
                                           update_period=timestep,
                                           filter_prim_paths_expr=ground_prim_paths)
