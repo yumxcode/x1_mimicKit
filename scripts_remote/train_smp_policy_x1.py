@@ -72,16 +72,54 @@ def main():
             sys.exit(1)
 
     out_dir = "output/x1_smp_policy"
-    env = dict(os.environ, CUDA_LAUNCH_BLOCKING="1")  # surface async asserts
-    r = subprocess.run(
-        [sys.executable, "mimickit/run.py", "--arg_file", "args/smp_x1_args.txt"],
-        env=env)
-    print(f"[policy] train exit {r.returncode}", flush=True)
-
-    # mirror all model files to the SDK-scanned dir
     run_ts = time.strftime("%Y-%m-%d_%H-%M-%S") + "x1_smp_policy"
     exp_dir = os.path.join("logs", "x1_smp_policy", "exported_data", run_ts)
     os.makedirs(exp_dir, exist_ok=True)
+
+    def _publish_once(tag):
+        """Copy the newest model snapshot into the SDK-scanned dir."""
+        try:
+            src = os.path.join(out_dir, "model.pt")
+            if os.path.exists(src):
+                shutil.copy2(src, os.path.join(exp_dir, f"model_{tag}.pt"))
+                print(f"[policy] watcher published snapshot {tag}", flush=True)
+        except Exception as e:
+            print(f"[policy] watcher error: {e}", flush=True)
+
+    def _watcher(stop):
+        # publish a snapshot every 10 min so a hard kill (OOM/node loss)
+        # never loses more than 10 min of training
+        last = -1
+        while not stop.is_set():
+            try:
+                src = os.path.join(out_dir, "model.pt")
+                if os.path.exists(src):
+                    mtime = int(os.path.getmtime(src))
+                    if mtime > last:
+                        _publish_once(time.strftime("%H%M%S"))
+                        last = mtime
+            except Exception as e:
+                print(f"[policy] watcher error: {e}", flush=True)
+            stop.wait(600)
+
+    import threading
+    stop_evt = threading.Event()
+    th = threading.Thread(target=_watcher, args=(stop_evt,), daemon=True)
+    th.start()
+
+    # CUDA_LAUNCH_BLOCKING only when POLICY_DEBUG=1: it costs ~3x speed
+    env = dict(os.environ)
+    if os.environ.get("POLICY_DEBUG", "0") == "1":
+        env["CUDA_LAUNCH_BLOCKING"] = "1"
+    r = subprocess.run(
+        [sys.executable, "mimickit/run.py", "--arg_file", "args/smp_x1_args.txt"],
+        env=env)
+    stop_evt.set()
+    th.join(timeout=5)
+    _publish_once("final")
+    print(f"[policy] train exit {r.returncode}", flush=True)
+
+    # mirror all model files to the SDK-scanned dir
     for src in sorted(glob.glob(os.path.join(out_dir, "**", "model_*.pt"),
                                 recursive=True)):
         iter_name = os.path.basename(src)
