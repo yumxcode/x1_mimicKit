@@ -424,10 +424,19 @@ class IsaacLabEngine(engine.Engine):
     
     def get_ground_contact_forces(self, obj_id):
         sensor = self._ground_contact_sensors[obj_id]
-        forces = sensor.data.force_matrix_w
-        forces = forces.sum(dim=-2)
+        forces = _to_torch(sensor.data.force_matrix_w, self._device)
+        if (forces.dim() == 4):
+            forces = forces.sum(dim=-2)
 
         body_order_sim2common = self._sensor_body_order_sim2common[obj_id]
+        n_bodies = int(body_order_sim2common.shape[0])
+        if (forces.shape[1] < n_bodies):
+            # sensor reports fewer bodies than the model expects; pad with
+            # zeros so contact gating by body id still works
+            pad = torch.zeros([forces.shape[0], n_bodies - forces.shape[1],
+                               forces.shape[2]],
+                              dtype=forces.dtype, device=forces.device)
+            forces = torch.cat([forces, pad], dim=1)
         forces = forces[:, body_order_sim2common, :]
         return forces
     
@@ -1198,20 +1207,16 @@ class IsaacLabEngine(engine.Engine):
         timestep = self.get_timestep()
 
         for obj_id in range(objs_per_env):
-            # find child primitive that contains ContactReportAPI
-            obj_path = OBJ_PATH_TEMPLATE.format(0, obj_id)
-            contact_prim_path = self._find_contact_prim_path(obj_path)
-
-            if (contact_prim_path is not None):
-                contact_prim_name = os.path.basename(contact_prim_path)
-                sensor_regex = OBJ_PATH_TEMPLATE.format(".*", obj_id) + "/{:s}/.*".format(contact_prim_name)
-
-                sensor_cfg = ContactSensorCfg(prim_path=sensor_regex, 
-                                              update_period=timestep,
-                                              filter_prim_paths_expr=ground_prim_paths)
-                sensor = ContactSensor(sensor_cfg)
-            else:
-                sensor = None
+            # Sensor over the WHOLE object (all rigid bodies), not just the
+            # first prim with ContactReportAPI. Older IsaacLab ancestors set
+            # that API on the articulation root only and the sensor then
+            # covered every link; 6.x reports only the matched prim
+            # (base_link), which breaks force indexing by body id.
+            sensor_regex = OBJ_PATH_TEMPLATE.format(".*", obj_id) + "/?.*"
+            sensor_cfg = ContactSensorCfg(prim_path=sensor_regex,
+                                          update_period=timestep,
+                                          filter_prim_paths_expr=ground_prim_paths)
+            sensor = ContactSensor(sensor_cfg)
         
             self._ground_contact_sensors.append(sensor)
         return
