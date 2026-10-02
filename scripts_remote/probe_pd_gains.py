@@ -95,8 +95,10 @@ for name, kp, kd, mx in sample:
     char_id = env._get_char_id()
     obj = eng._objs[char_id]
     act = obj.actuators["actuators"]
-    kp = eng._to_torch(act.stiffness, eng._device)[0]
-    kd = eng._to_torch(act.damping, eng._device)[0]
+
+    from engines.isaac_lab_engine import _to_torch
+    kp = _to_torch(act.stiffness, eng._device)[0]
+    kd = _to_torch(act.damping, eng._device)[0]
     print(f"PD runtime kp head: {kp[:8].tolist()}")
     print(f"PD runtime kd head: {kd[:8].tolist()}")
     print(f"PD runtime kp min/max: {float(kp.min())}/{float(kp.max())}")
