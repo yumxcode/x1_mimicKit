@@ -219,6 +219,13 @@ class IsaacLabEngine(engine.Engine):
         # the stage is live; the USD asset already authors
         # PhysxContactReportAPI on every rigid body.
         self._build_ground_contact_sensors()
+        for s in self._ground_contact_sensors:
+            if (s is not None and hasattr(s, "initialize")):
+                try:
+                    s.initialize()  # lazy PhysX view needs explicit init
+                except Exception as e:
+                    Logger.print("[isaac_lab_engine] contact sensor init "
+                                 "deferred: {}".format(e))
         
         self._build_body_order_tensors()
         self._build_sensor_order_tensors()
