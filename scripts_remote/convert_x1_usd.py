@@ -112,6 +112,21 @@ try:
             st.Export(flat_tmp)
             shutil.move(flat_tmp, target)
             st = Usd.Stage.Open(target)
+
+        # author PhysxContactReportAPI on EVERY rigid body: IsaacLab 6.x
+        # ContactSensor matches leaf prim names AND requires the API;
+        # without this only base_link reports (per-body force index breaks)
+        try:
+            from pxr import PhysxSchema
+            n_contact = 0
+            for prim in st.Traverse():
+                if prim.HasAPI(UsdPhysics.RigidBodyAPI):
+                    PhysxSchema.PhysxContactReportAPI.Apply(prim)
+                    n_contact += 1
+            st.GetRootLayer().Save()
+            print(f"CONVERT_CONTACT_API applied={n_contact}", flush=True)
+        except Exception as e:
+            print(f"CONVERT_CONTACT_API failed: {e}", flush=True)
         return count_on(st), st
 
     base_kwargs = dict(
@@ -221,6 +236,17 @@ try:
                     drive.GetDampingAttr().Set(kd * 57.29578)
                     drive.GetMaxForceAttr().Set(efforts.get(name, 100.0))
                     n_set += 1
+        # URDF path: also author contact-report API on every rigid body
+        try:
+            from pxr import PhysxSchema
+            n_contact = 0
+            for prim in stage.Traverse():
+                if prim.HasAPI(UsdPhysics.RigidBodyAPI):
+                    PhysxSchema.PhysxContactReportAPI.Apply(prim)
+                    n_contact += 1
+            print(f"CONVERT_URDF contact_api={n_contact}", flush=True)
+        except Exception as e:
+            print(f"CONVERT_URDF contact_api failed: {e}", flush=True)
         stage.GetRootLayer().Save()
         n_rb, n_joint, n_art = count_on(stage)
         print(f"CONVERT_URDF drives_set={n_set} rigid_bodies={n_rb} "
