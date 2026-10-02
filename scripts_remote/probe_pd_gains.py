@@ -38,10 +38,14 @@ def main():
     import subprocess
     usd = os.path.join(repo, "data/assets/x1/x1.usd")
     if not os.path.exists(usd):
+        print("PD pre-convert", flush=True)
         r = subprocess.run([sys.executable, "scripts_remote/convert_x1_usd.py"])
         if r.returncode != 0:
             print("PD RESULT: FAIL (convert)")
             sys.exit(1)
+        print("PD post-convert", flush=True)
+    else:
+        print("PD usd-exists", flush=True)
 
     # ---- USD side: DriveAPI audit
     from pxr import Usd, UsdPhysics
@@ -61,13 +65,24 @@ def main():
     for name, kp, kd, mx in sample:
         print(f"PD usd {name}: kp={kp} kd={kd} maxforce={mx}")
 
-    # ---- runtime side: build env and read actuator gains
+    # ---- runtime side: build env and read actuator gains (with 1 retry -
+    # occasional native Kit crashes happen at app startup on some nodes)
     import torch
     import envs.env_builder as env_builder
-    env = env_builder.build_env(
-        "data/envs/smp_x1_env.yaml",
-        "data/engines/isaac_lab_engine.yaml",
-        num_envs=4, device="cuda:0", visualize=False, record_video=False)
+    print("PD pre-env", flush=True)
+    env = None
+    for attempt in range(2):
+        try:
+            env = env_builder.build_env(
+                "data/envs/smp_x1_env.yaml",
+                "data/engines/isaac_lab_engine.yaml",
+                num_envs=4, device="cuda:0", visualize=False, record_video=False)
+            break
+        except Exception as e:
+            print(f"PD env-build attempt {attempt} failed: {e}", flush=True)
+            if attempt == 1:
+                raise
+    print("PD post-env", flush=True)
 
     eng = env._engine
     char_id = env._get_char_id()
