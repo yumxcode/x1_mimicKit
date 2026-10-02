@@ -72,8 +72,10 @@ def main():
             sys.exit(1)
 
     out_dir = "output/x1_smp_policy"
+    env = dict(os.environ, CUDA_LAUNCH_BLOCKING="1")  # surface async asserts
     r = subprocess.run(
-        [sys.executable, "mimickit/run.py", "--arg_file", "args/smp_x1_args.txt"])
+        [sys.executable, "mimickit/run.py", "--arg_file", "args/smp_x1_args.txt"],
+        env=env)
     print(f"[policy] train exit {r.returncode}", flush=True)
 
     # mirror all model files to the SDK-scanned dir
@@ -89,9 +91,12 @@ def main():
     if os.path.exists(final):
         shutil.copy2(final, os.path.join(exp_dir, "model_final.pt"))
         print(f"[policy] published {final} -> model_final.pt", flush=True)
-
-    ok = r.returncode == 0
-    print("[policy] RESULT:", "PASS" if ok else "FAIL", flush=True)
+    has_final = os.path.exists(final)
+    n_int = len(glob.glob(os.path.join(out_dir, "**", "model_*.pt"),
+                          recursive=True))
+    ok = r.returncode == 0 and (has_final or n_int > 0)
+    print(f"[policy] RESULT: {'PASS' if ok else 'FAIL'} "
+          f"(final={has_final} int_models={n_int})", flush=True)
     sys.exit(0 if ok else 1)
 
 
