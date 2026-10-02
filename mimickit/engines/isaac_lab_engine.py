@@ -207,11 +207,18 @@ class IsaacLabEngine(engine.Engine):
         self._validate_envs()
         self._build_envs()
         self._build_objs()
-        self._build_ground_contact_sensors()
         self._filter_env_collisions()
 
         Logger.print("Initializing simulation...")
         self._sim.reset()
+
+        # contact sensors AFTER sim.reset(): the spawner's built-in
+        # activate_contact_sensors runs at spawn time when prim references
+        # are not yet resolved (no visible rigid bodies -> ValueError).
+        # IsaacLab 6.x ContactSensor resolves and reports on its own once
+        # the stage is live; the USD asset already authors
+        # PhysxContactReportAPI on every rigid body.
+        self._build_ground_contact_sensors()
         
         self._build_body_order_tensors()
         self._build_sensor_order_tensors()
@@ -1012,7 +1019,7 @@ class IsaacLabEngine(engine.Engine):
         usd_cfg = sim_utils.UsdFileCfg(usd_path=usd_asset_file, 
                                        visual_material=visual_material, 
                                        rigid_props=rigid_props,
-                                       activate_contact_sensors=True)
+                                       activate_contact_sensors=False)
         
         prim_path = OBJ_PATH_TEMPLATE.format(env_id, obj_id)
         init_state = RigidObjectCfg.InitialStateCfg(pos=obj_cfg.start_pos, rot=obj_cfg.start_rot)
@@ -1049,7 +1056,7 @@ class IsaacLabEngine(engine.Engine):
                                        visual_material=visual_material,
                                        articulation_props=articulation_props,
                                        rigid_props=rigid_props,
-                                       activate_contact_sensors=True)
+                                       activate_contact_sensors=False)
 
         if (obj_cfg.disable_motors):
             control_mode = engine.ControlMode.none
