@@ -1,2 +1,4 @@
 *
 !.gitignore
+!smp_priors
+!smp_priors/**

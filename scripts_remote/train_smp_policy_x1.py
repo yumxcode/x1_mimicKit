@@ -55,12 +55,12 @@ def main():
                             "diffusers>=0.36.0"])
         assert r.returncode == 0, "pip install diffusers failed"
 
-    prior_dir = os.path.join(repo, "output", "x1_smp_prior")
-    missing = [f for f in ("model.pt", "diffusion_config.yaml")
-               if not os.path.exists(os.path.join(prior_dir, f))]
+    prior_model = os.path.join(repo, "data/models/smp_priors/x1_prior.pt")
+    prior_cfg = os.path.join(
+        repo, "tools/diffusion_model/config/tinymdm_x1_multi_clip.yaml")
+    missing = [p for p in (prior_model, prior_cfg) if not os.path.isfile(p)]
     if missing:
-        print(f"[policy] FAIL prior artifacts missing in {prior_dir}: {missing}",
-              flush=True)
+        print(f"[policy] FAIL prior artifacts missing: {missing}", flush=True)
         sys.exit(1)
 
     # ensure the IsaacLab USD asset exists (MJCF -> USD conversion)

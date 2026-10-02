@@ -45,5 +45,5 @@ enable_gsi: False
 task_reward_weight: 0.0
 smp_reward_weight: 1.0
 
-smp_prior_cfg: "output/x1_smp_prior/diffusion_config.yaml"
-smp_prior_model: "output/x1_smp_prior/model.pt"
+smp_prior_cfg: "tools/diffusion_model/config/tinymdm_x1_multi_clip.yaml"
+smp_prior_model: "data/models/smp_priors/x1_prior.pt"
