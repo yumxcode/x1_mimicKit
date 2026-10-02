@@ -866,19 +866,82 @@ class IsaacLabEngine(engine.Engine):
             asset_file = asset_root + ".usd"
         return asset_file
     
-    def _build_actuator_cfg(self, control_mode):
+    def _parse_mjcf_gains(self, asset_file):
+        """Per-joint PD gains + effort limits from the training MJCF.
+
+        Returns (joint_names, kp[], kd[], effort[]) or None when the file
+        is not a parseable MJCF. Used so actuator gains never depend on
+        USD DriveAPI authoring (which MJCF->USD converters may drop).
+        """
+        try:
+            import xml.etree.ElementTree as ET
+            root = ET.parse(asset_file).getroot()
+            names, kps, kds = [], [], []
+            joints = {}
+            def walk(b):
+                for j in b.findall("joint"):
+                    joints[j.attrib["name"]] = (
+                        float(j.attrib.get("stiffness", 0)),
+                        float(j.attrib.get("damping", 0)))
+                for c in b.findall("body"):
+                    walk(c)
+            wb = root.find("worldbody")
+            if wb is not None:
+                walk(wb.find("body"))
+            efforts = {}
+            act = root.find("actuator")
+            if act is not None:
+                for m in act.findall("motor"):
+                    efforts[m.attrib["joint"]] = float(m.attrib.get("gear", 1))
+            for n, (kp, kd) in joints.items():
+                names.append(n)
+                kps.append(kp)
+                kds.append(kd)
+            if (not names):
+                return None
+            eff = [efforts.get(n, 1.0) for n in names]
+            return names, kps, kds, eff
+        except Exception as e:
+            Logger.print("[isaac_lab_engine] mjcf gain parse failed: {}".format(e))
+            return None
+
+    def _build_actuator_cfg(self, control_mode, asset_file=None):
         from isaaclab.actuators import ImplicitActuatorCfg, IdealPDActuatorCfg
+
+        # explicit per-joint gains from the MJCF so training does NOT
+        # depend on USD DriveAPI (converters may drop them -> stiffness 0
+        # -> instant collapse -> flat rewards)
+        gains = self._parse_mjcf_gains(asset_file) if asset_file else None
+        if gains is not None:
+            names, kps, kds, effs = gains
+            kp_dict = {n: kp for n, kp in zip(names, kps)}
+            kd_dict = {n: kd for n, kd in zip(names, kds)}
+            ef_dict = {n: e for n, e in zip(names, effs)}
 
         if (control_mode == engine.ControlMode.none):
             actuator_cfg = IdealPDActuatorCfg(joint_names_expr=[".*"], stiffness=0, damping=0, effort_limit=0)
         elif (control_mode == engine.ControlMode.pos):
-            actuator_cfg = ImplicitActuatorCfg(joint_names_expr=[".*"], stiffness=None, damping=None, effort_limit=None)
+            if gains is not None:
+                actuator_cfg = ImplicitActuatorCfg(
+                    joint_names_expr=[".*"], stiffness=kp_dict,
+                    damping=kd_dict, effort_limit=ef_dict)
+            else:
+                actuator_cfg = ImplicitActuatorCfg(joint_names_expr=[".*"], stiffness=None, damping=None, effort_limit=None)
         elif (control_mode == engine.ControlMode.vel):
             actuator_cfg = ImplicitActuatorCfg(joint_names_expr=[".*"], stiffness=0, damping=None, effort_limit=None)
         elif (control_mode == engine.ControlMode.torque):
-            actuator_cfg = IdealPDActuatorCfg(joint_names_expr=[".*"], stiffness=0, damping=0, effort_limit=None)
+            if gains is not None:
+                actuator_cfg = IdealPDActuatorCfg(
+                    joint_names_expr=[".*"], stiffness=0, damping=0, effort_limit=ef_dict)
+            else:
+                actuator_cfg = IdealPDActuatorCfg(joint_names_expr=[".*"], stiffness=0, damping=0, effort_limit=None)
         elif (control_mode == engine.ControlMode.pd_explicit):
-            actuator_cfg = IdealPDActuatorCfg(joint_names_expr=[".*"], stiffness=None, damping=None, effort_limit=None)
+            if gains is not None:
+                actuator_cfg = IdealPDActuatorCfg(
+                    joint_names_expr=[".*"], stiffness=kp_dict,
+                    damping=kd_dict, effort_limit=ef_dict)
+            else:
+                actuator_cfg = IdealPDActuatorCfg(joint_names_expr=[".*"], stiffness=None, damping=None, effort_limit=None)
         else:
             assert(False), "Unsupported control mode: {}".format(self._control_mode)
 
@@ -1061,7 +1124,8 @@ class IsaacLabEngine(engine.Engine):
         else:
             control_mode = self.get_control_mode()
 
-        actuator_cfg = self._build_actuator_cfg(control_mode)
+        actuator_cfg = self._build_actuator_cfg(control_mode,
+                                                asset_file=obj_cfg.asset_file)
 
         prim_path = OBJ_PATH_TEMPLATE.format(env_id, obj_id)
         init_state = ArticulationCfg.InitialStateCfg(pos=obj_cfg.start_pos, rot=obj_cfg.start_rot)
@@ -1104,7 +1168,8 @@ class IsaacLabEngine(engine.Engine):
         else:
             control_mode = self.get_control_mode()
 
-        actuator_cfg = self._build_actuator_cfg(control_mode)
+        actuator_cfg = self._build_actuator_cfg(control_mode,
+                                                asset_file=obj_cfg.asset_file)
 
         regex = OBJ_PATH_TEMPLATE.format(".*", obj_id)
         multi_obj_cfg = ArticulationCfg(prim_path=regex, spawn=None, actuators={"actuators": actuator_cfg})
