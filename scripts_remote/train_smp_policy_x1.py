@@ -77,12 +77,19 @@ def main():
     os.makedirs(exp_dir, exist_ok=True)
 
     def _publish_once(tag):
-        """Copy the newest model snapshot into the SDK-scanned dir."""
+        """Copy the newest model snapshot into the SDK-scanned dir with a
+        UNIQUE file name each time (SDK uploads only newly-detected files;
+        overwriting an existing name silently skips the upload)."""
         try:
             src = os.path.join(out_dir, "model.pt")
             if os.path.exists(src):
-                shutil.copy2(src, os.path.join(exp_dir, f"model_{tag}.pt"))
-                print(f"[policy] watcher published snapshot {tag}", flush=True)
+                dst = os.path.join(exp_dir, f"model_{tag}.pt")
+                n = 0
+                while os.path.exists(dst):
+                    n += 1
+                    dst = os.path.join(exp_dir, f"model_{tag}_{n}.pt")
+                shutil.copy2(src, dst)
+                print(f"[policy] watcher published {dst}", flush=True)
         except Exception as e:
             print(f"[policy] watcher error: {e}", flush=True)
 
