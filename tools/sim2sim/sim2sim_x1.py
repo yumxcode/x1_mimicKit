@@ -69,11 +69,11 @@ def quat_mul(a, b):
 
 def quat_to_tan_norm(q):
     """MimicKit torch_util.quat_to_tan_norm: 6D rep [tangent, normal] where
-    tangent = q * x-axis and normal = q * z-axis."""
+    tangent = q * x-axis and normal = q * z-axis (verified vs scipy)."""
     x, y, z, w = q[..., 1], q[..., 2], q[..., 3], q[..., 0]
     tx = np.stack([1 - 2 * (y * y + z * z), 2 * (x * y + w * z),
                    2 * (x * z - w * y)], axis=-1)
-    tz = np.stack([2 * (x * z - w * y), 2 * (y * z + w * x),
+    tz = np.stack([2 * (x * z + w * y), 2 * (y * z - w * x),
                    1 - 2 * (x * x + y * y)], axis=-1)
     return np.concatenate([tx, tz], axis=-1)
 
