@@ -127,7 +127,10 @@ def main():
         cands = sorted(glob.glob(os.path.join(repo, "model_20*.pt")))
         if (not cands):
             staged = os.path.join(repo, "data/models/smp_policies")
-            cands = sorted(glob.glob(os.path.join(staged, "*.pt")))
+            # pick by mtime (newest), NOT lexicographic: "10k5" sorts
+            # before "7k" and would silently resume from older weights
+            cands = sorted(glob.glob(os.path.join(staged, "*.pt")),
+                           key=os.path.getmtime)
         if (cands):
             resume_model = cands[-1]
     cmd = [sys.executable, "mimickit/run.py", "--arg_file",
