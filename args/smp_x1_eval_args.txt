@@ -1,0 +1,10 @@
+--mode test
+--num_envs 32
+--visualize false
+--test_episodes 1
+
+--engine_config data/engines/isaac_lab_engine.yaml
+--env_config data/envs/smp_x1_env.yaml
+--agent_config data/agents/smp_x1_agent.yaml
+
+--out_dir output/x1_smp_policy_eval

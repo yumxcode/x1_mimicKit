@@ -142,6 +142,26 @@ def main():
     _publish_once("final")
     print(f"[policy] train exit {r.returncode}", flush=True)
 
+    # ---- post-train survival eval (in-training physics): mean episode
+    # length is the S1-equivalent metric; fall => short episode,
+    # surviving 10 s => ~300 steps. Gives each relay a quality signal.
+    try:
+        ev = subprocess.run(
+            [sys.executable, "mimickit/run.py", "--arg_file",
+             "args/smp_x1_eval_args.txt", "--model_file",
+             os.path.join(out_dir, "model.pt")],
+            capture_output=True, text=True, timeout=1800, env=env)
+        ev_out = ev.stdout + ev.stderr
+        mep = [l for l in ev_out.splitlines() if "Mean Episode Length" in l]
+        print(f"[policy] EVAL {' | '.join(mep) if mep else 'no metric (exit ' + str(ev.returncode) + ')'}",
+              flush=True)
+        if (not mep):
+            keep = [l for l in ev_out.splitlines()
+                    if ('File "' in l or "Error" in l)]
+            print("[policy] EVAL tail: " + " | ".join(keep[-8:]), flush=True)
+    except Exception as e:
+        print(f"[policy] EVAL failed: {e}", flush=True)
+
     # mirror all model files to the SDK-scanned dir
     for src in sorted(glob.glob(os.path.join(out_dir, "**", "model_*.pt"),
                                 recursive=True)):
