@@ -119,13 +119,15 @@ def main():
     if os.environ.get("POLICY_DEBUG", "0") == "1":
         env["CUDA_LAUNCH_BLOCKING"] = "1"
 
-    # resume: warm-start from a mounted checkpoint. gradmotion resume tasks
-    # mount the file at the repo root with the platform file name; an env
-    # var X1_RESUME_MODEL takes precedence. run.py loads --model_file
-    # BEFORE training starts.
+    # resume: warm-start from a checkpoint. Precedence: X1_RESUME_MODEL env,
+    # a platform-mounted model_20*.pt at repo root, then the latest staged
+    # policy in data/models/smp_policies/ (git-tracked relay weights).
     resume_model = os.environ.get("X1_RESUME_MODEL", "")
     if (not resume_model):
         cands = sorted(glob.glob(os.path.join(repo, "model_20*.pt")))
+        if (not cands):
+            staged = os.path.join(repo, "data/models/smp_policies")
+            cands = sorted(glob.glob(os.path.join(staged, "*.pt")))
         if (cands):
             resume_model = cands[-1]
     cmd = [sys.executable, "mimickit/run.py", "--arg_file",
