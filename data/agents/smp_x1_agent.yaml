@@ -9,12 +9,12 @@ model:
   critic_net: "fc_2layers_1024units"
 
 actor_optimizer:
-    type: "SGD"
-    learning_rate: 1e-4
+    type: "Adam"
+    learning_rate: 3e-4
 
 critic_optimizer:
-    type: "SGD"
-    learning_rate: 1e-4
+    type: "Adam"
+    learning_rate: 3e-4
 
 discount: 0.99
 steps_per_iter: 32
@@ -37,12 +37,20 @@ action_reg_weight: 0.0
 critic_loss_weight: 1.0
 
 smp_eval_batch_size: 4096
-sds_loss_scale: 6
+# dm_worker r4 fix (branch dm/smp-reward-fix):
+# r3 (TASK_20261002_060) froze: DiffNormalizer.normalize=x/mean_abs is
+# self-normalizing, so mean sds_loss_norm ~= 1 always, and
+# smp_r = exp(-1*6) ~= 0.0025 with tiny relative spread. Combined with
+# SGD lr=1e-4 the actor gradient (~1e-3 * 1e-4) is effectively zero.
+# Fix: soften kernel exp(-2z) (r~0.13 typical, ~50x larger spread),
+# switch to AdamW 3e-4, and add 0.5*w task (DeepMimic-style tracking)
+# for a dense absolute signal alongside the diffusion prior kernel.
+sds_loss_scale: 2
 diffusion_steps: [22, 15, 8]
 
 enable_gsi: False
 
-task_reward_weight: 0.0
+task_reward_weight: 0.5
 smp_reward_weight: 1.0
 
 smp_prior_cfg: "tools/diffusion_model/config/tinymdm_x1_multi_clip.yaml"
