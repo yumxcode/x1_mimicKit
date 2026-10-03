@@ -75,6 +75,11 @@ def main():
     run_ts = time.strftime("%Y-%m-%d_%H-%M-%S") + "x1_smp_policy"
     exp_dir = os.path.join("logs", "x1_smp_policy", "exported_data", run_ts)
     os.makedirs(exp_dir, exist_ok=True)
+    # r5 fix: SDK only picks up TOP-LEVEL unique names under output/
+    # (verified channel: output/{unique}.pt; subdirs incl. exported_data and
+    # int_models are NOT scanned -> r4's 37 int_models were lost in-container)
+    sdk_dir = os.path.join(repo, "output")
+    os.makedirs(sdk_dir, exist_ok=True)
 
     def _publish_once(tag):
         """Copy the newest model snapshot into the SDK-scanned dir with a
@@ -83,13 +88,15 @@ def main():
         try:
             src = os.path.join(out_dir, "model.pt")
             if os.path.exists(src):
+                top = os.path.join(sdk_dir, f"model_r5_{tag}.pt")
+                shutil.copy2(src, top)
                 dst = os.path.join(exp_dir, f"model_{tag}.pt")
                 n = 0
                 while os.path.exists(dst):
                     n += 1
                     dst = os.path.join(exp_dir, f"model_{tag}_{n}.pt")
                 shutil.copy2(src, dst)
-                print(f"[policy] watcher published {dst}", flush=True)
+                print(f"[policy] watcher published {top} (mirror {dst})", flush=True)
         except Exception as e:
             print(f"[policy] watcher error: {e}", flush=True)
 
@@ -162,16 +169,19 @@ def main():
     except Exception as e:
         print(f"[policy] EVAL failed: {e}", flush=True)
 
-    # mirror all model files to the SDK-scanned dir
+    # mirror all model files to the SDK-scanned dir (r5: top-level unique
+    # names so the SDK actually uploads them)
     for src in sorted(glob.glob(os.path.join(out_dir, "**", "model_*.pt"),
                                 recursive=True)):
         iter_name = os.path.basename(src)
+        shutil.copy2(src, os.path.join(sdk_dir, "r5_" + iter_name))
         shutil.copy2(src, os.path.join(exp_dir, iter_name))
         print(f"[policy] published {src}", flush=True)
     final = os.path.join(out_dir, "model.pt")
     if os.path.exists(final):
+        shutil.copy2(final, os.path.join(sdk_dir, "model_r5_final.pt"))
         shutil.copy2(final, os.path.join(exp_dir, "model_final.pt"))
-        print(f"[policy] published {final} -> model_final.pt", flush=True)
+        print(f"[policy] published {final} -> model_r5_final.pt", flush=True)
     has_final = os.path.exists(final)
     n_int = len(glob.glob(os.path.join(out_dir, "**", "model_*.pt"),
                           recursive=True))
