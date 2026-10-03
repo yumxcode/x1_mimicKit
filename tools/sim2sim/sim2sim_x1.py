@@ -212,6 +212,7 @@ class X1Sim:
         self.m = mujoco.MjModel.from_xml_path(str(X1_SIM))
         self.d = mujoco.MjData(self.m)
         self.m.opt.timestep = SIM_DT
+        self._setup_implicit_pd(mujoco)
         self.qadr = np.array([self.m.joint(n).qposadr[0]
                               for n in spec["names"]])
         self.vadr = np.array([self.m.joint(n).dofadr[0]
@@ -222,6 +223,33 @@ class X1Sim:
                           for s in ("left", "right")}
         self.foot_bids = {s: self.m.body(f"{s}_ankle_roll_link").id
                           for s in ("left", "right")}
+
+    def _setup_implicit_pd(self, mujoco):
+        """Convert torque motors to MuJoCo position servos with joint-level
+        PD handled by the (implicit) solver.
+
+        Explicit torque PD at kp up to 450 with small armatures diverges
+        under Euler at dt=1/120 (numerically stiff); MuJoCo integrates
+        joint damping and position servos stably. This mirrors the
+        IsaacLab ImplicitActuator semantics used in training.
+        """
+        for i, name in enumerate(self.spec["names"]):
+            jid = self.m.joint(name).id
+            kp = float(self.spec["kp"][i])
+            kd = float(self.spec["kd"][i])
+            # NOT jnt_stiffness: that is a passive spring pulling toward
+            # qpos0 (=0), wrong semantics. Damping stays implicit at the
+            # joint; the servo provides kp toward the ctrl target.
+            self.m.jnt_stiffness[jid] = 0.0
+            self.m.dof_damping[self.m.joint(name).dofadr[0]] = kd
+            # position servo: force = kp*(ctrl - q); damping implicit
+            self.m.actuator_gaintype[i] = mujoco.mjtGain.mjGAIN_FIXED
+            self.m.actuator_gainprm[i, 0] = kp
+            self.m.actuator_biastype[i] = mujoco.mjtBias.mjBIAS_AFFINE
+            self.m.actuator_biasprm[i, 0] = 0.0
+            self.m.actuator_biasprm[i, 1] = -kp
+            self.m.actuator_biasprm[i, 2] = 0.0
+            self.m.actuator_ctrllimited[i] = 0
 
     def set_init(self, frame):
         import mujoco
@@ -274,12 +302,19 @@ class X1Sim:
 
     def apply_action(self, a):
         a = np.clip(a, self.spec["a_low"], self.spec["a_high"])
-        d = self.d
-        q = d.qpos[self.qadr]
-        qd = d.qvel[self.vadr]
-        tau = self.spec["kp"] * (a - q) - self.spec["kd"] * qd
-        tau = np.clip(tau, -self.spec["effort"], self.spec["effort"])
-        d.ctrl[:] = tau
+        # position servos: ctrl = joint position target; effort clip via
+        # actuator_forcerange keeps the torque within URDF limits
+        forcerange_ok = True
+        try:
+            fr = self.m.actuator_forcerange
+            forcerange_ok = fr.shape[0] == len(a)
+        except Exception:
+            forcerange_ok = False
+        if (forcerange_ok):
+            self.m.actuator_forcerange[:, 0] = -self.spec["effort"]
+            self.m.actuator_forcerange[:, 1] = self.spec["effort"]
+            self.m.actuator_forcelimited[:] = 1
+        self.d.ctrl[:] = a
 
     def step_sim(self):
         import mujoco
@@ -370,10 +405,14 @@ def run_sim2sim(args):
         root_pos, root_rot, _, _, dof_pos, dof_vel, _ = sim.state()
         sole = sim.sole_geometry()
         w = root_rot
-        pitch = math.degrees(math.atan2(2 * (w[0] * w[2] - w[1] * w[3]),
-                                        1 - 2 * (w[2] ** 2 + w[3] ** 2)))
-        roll = math.degrees(math.atan2(2 * (w[0] * w[1] + w[2] * w[3]),
-                                       1 - 2 * (w[1] ** 2 + w[3] ** 2)))
+        # tilt of the body up-axis vs world z (singularity-free, unlike
+        # Euler pitch/roll which blow up near yaw = +-180)
+        tz = 1 - 2 * (w[2] ** 2 + w[3] ** 2) * 0  # placeholder, computed below
+        x, y, z, ww = w[1], w[2], w[3], w[0]
+        body_up_z = 1 - 2 * (x * x + y * y)  # R[2,2]
+        tilt = math.degrees(math.acos(min(1.0, abs(body_up_z))))
+        pitch = tilt  # logged as tilt semantics
+        roll = 0.0
         log["t"].append(step / FPS)
         log["root_z"].append(root_pos[2])
         log["root_pos"].append(root_pos.copy())
@@ -393,11 +432,10 @@ def run_sim2sim(args):
             if sim.d.xpos[bid][2] < 0.05:
                 nonfoot_contact = True
                 break
-        if (nonfoot_contact or root_pos[2] < 0.35
-                or abs(pitch) > 60 or abs(roll) > 60):
+        if (nonfoot_contact or root_pos[2] < 0.35 or tilt > 60):
             fallen = True
             print(f"[sim2sim] FALLEN at t={step/FPS:.2f}s "
-                  f"(z={root_pos[2]:.3f} pitch={pitch:.0f} roll={roll:.0f} "
+                  f"(z={root_pos[2]:.3f} tilt={tilt:.0f} "
                   f"nonfoot={nonfoot_contact})")
             break
 

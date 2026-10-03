@@ -1,4 +1,6 @@
 *
 !.gitignore
+!smp_policies
 !smp_priors
 !smp_priors/**
+!smp_policies/**
