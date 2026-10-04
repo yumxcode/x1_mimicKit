@@ -70,7 +70,13 @@ class BaseAgent(torch.nn.Module):
             train_info = self._train_iter()
             
             self._sample_count = self._update_sample_count()
-            output_iter = (self._iter % self._iters_per_output == 0) or (self._sample_count >= max_samples)
+            # r11: skip the iter-0 save. On gradmotion image-335 the SDK
+            # registers only the FIRST .pt file it detects in the task
+            # workspace; the historical iter-0 checkpoint (3 iters, untrained)
+            # was burning that registration slot (r4/r6/r10 lost final weights
+            # this way). With iters_per_output > total iters, the first and
+            # only model.pt on disk is now the FINAL trained weights.
+            output_iter = (self._iter > 0 and self._iter % self._iters_per_output == 0) or (self._sample_count >= max_samples)
 
             if (output_iter):
                 test_info = self.test_model(self._test_episodes)
