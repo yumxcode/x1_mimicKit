@@ -215,6 +215,18 @@ def main():
     except Exception as e:
         print(f"[policy] EVAL failed: {e}", flush=True)
 
+    # ---- r8: render the trained policy to mp4 (user directive: Isaac-side
+    # X1-mesh running video; SDK uploads logs/*.mp4 as videoUrl). Isolated:
+    # a render crash never affects weight publishing.
+    try:
+        rv = subprocess.run(
+            [sys.executable, "scripts_remote/render_policy_x1.py",
+             os.path.join(out_dir, "model.pt")],
+            timeout=1800, env=env)
+        print(f"[policy] RENDER exit {rv.returncode}", flush=True)
+    except Exception as e:
+        print(f"[policy] RENDER failed: {e}", flush=True)
+
     # mirror all model files to the SDK-scanned dir (r5: top-level unique
     # names so the SDK actually uploads them)
     for src in sorted(glob.glob(os.path.join(out_dir, "**", "model_*.pt"),
@@ -227,7 +239,10 @@ def main():
     if os.path.exists(final):
         shutil.copy2(final, os.path.join(sdk_dir, "model_r5_final.pt"))
         shutil.copy2(final, os.path.join(exp_dir, "model_final.pt"))
-        print(f"[policy] published {final} -> model_r5_final.pt", flush=True)
+        gm_play = os.path.join(repo, "logs", "x1_smp_policy", "gm_play")
+        os.makedirs(gm_play, exist_ok=True)
+        shutil.copy2(final, os.path.join(gm_play, "model_final_gmplay.pt"))
+        print(f"[policy] published {final} -> model_r5_final.pt (+gm_play)", flush=True)
     has_final = os.path.exists(final)
     n_int = len(glob.glob(os.path.join(out_dir, "**", "model_*.pt"),
                           recursive=True))
