@@ -102,10 +102,17 @@ def main():
     final = os.path.join(out_dir, "model.pt")
     ok = r.returncode == 0 and os.path.exists(final)
 
-    # publish final under a UNIQUE name the SDK has never seen
+    # publish final under a UNIQUE name the SDK has never seen.
+    # Numeric name `model_999999.pt` matches the platform checkpoint index
+    # (model_{checkpoint}.pt) so it appears in `gm task model list`;
+    # the fresh-dir copy rides the first-detection upload path.
     if ok:
-        shutil.copy2(final, os.path.join(exp_dir, "model_final.pt"))
-        print(f"[prior] published {final} -> model_final.pt", flush=True)
+        shutil.copy2(final, os.path.join(exp_dir, "model_999999.pt"))
+        print(f"[prior] published {final} -> model_999999.pt", flush=True)
+        fresh = os.path.join("output", "x1_smp_prior_final")
+        os.makedirs(fresh, exist_ok=True)
+        shutil.copy2(final, os.path.join(fresh, "model.pt"))
+        print(f"[prior] published {final} -> {fresh}/model.pt", flush=True)
 
         # post-train self-check: reload final weights and evaluate loss
         check = r'''

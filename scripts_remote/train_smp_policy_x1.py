@@ -179,8 +179,14 @@ def main():
         print(f"[policy] published {src}", flush=True)
     final = os.path.join(out_dir, "model.pt")
     if os.path.exists(final):
-        shutil.copy2(final, os.path.join(exp_dir, "model_final.pt"))
-        print(f"[policy] published {final} -> model_final.pt", flush=True)
+        # numeric name -> indexed by gm task model list (checkpoint 999999);
+        # fresh-dir copy rides the first-detection upload
+        shutil.copy2(final, os.path.join(exp_dir, "model_999999.pt"))
+        print(f"[policy] published {final} -> model_999999.pt", flush=True)
+        fresh = os.path.join("output", "x1_smp_policy_final")
+        os.makedirs(fresh, exist_ok=True)
+        shutil.copy2(final, os.path.join(fresh, "model.pt"))
+        print(f"[policy] published {final} -> {fresh}/model.pt", flush=True)
     has_final = os.path.exists(final)
     n_int = len(glob.glob(os.path.join(out_dir, "**", "model_*.pt"),
                           recursive=True))
