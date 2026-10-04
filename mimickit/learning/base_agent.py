@@ -66,7 +66,7 @@ class BaseAgent(torch.nn.Module):
         self._curr_obs, self._curr_info = self._reset_envs()
         self._init_train()
 
-        test_info = dict()  # r12: initialized - iter-0 no longer sets it
+        test_info = {"mean_return": 0.0, "mean_ep_len": 0.0, "num_eps": 0}  # r13: full placeholder keys (r12 died: _log_train_info reads them before first test runs)
         while self._sample_count < max_samples:
             train_info = self._train_iter()
             
