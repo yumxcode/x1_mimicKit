@@ -127,10 +127,16 @@ def main():
         cands = sorted(glob.glob(os.path.join(repo, "model_20*.pt")))
         if (not cands):
             staged = os.path.join(repo, "data/models/smp_policies")
-            # pick by mtime (newest), NOT lexicographic: "10k5" sorts
-            # before "7k" and would silently resume from older weights
-            cands = sorted(glob.glob(os.path.join(staged, "*.pt")),
-                           key=os.path.getmtime)
+            # select by iteration count parsed from the file name
+            # (x1_policy_10k5.pt -> 10500); git-checkout mtimes are all
+            # equal so mtime sorting degenerates to lexicographic order
+            def _iters(path):
+                import re as _re
+                m = _re.search(r"(\d+)k(\d*)", os.path.basename(path))
+                if (not m):
+                    return -1
+                return int(m.group(1)) * 1000 + int(m.group(2) or 0)
+            cands = sorted(glob.glob(os.path.join(staged, "*.pt")), key=_iters)
         if (cands):
             resume_model = cands[-1]
     cmd = [sys.executable, "mimickit/run.py", "--arg_file",
