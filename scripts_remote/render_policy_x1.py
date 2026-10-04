@@ -42,7 +42,8 @@ def main():
     import learning.agent_builder as agent_builder
     from learning.base_agent import AgentMode
 
-    util.set_rand_seed(np.uint64(20261004))
+    if hasattr(util, 'set_rand_seed'):
+        util.set_rand_seed(np.uint64(20261004))
     mp_util.init(0, 1, "cuda:0", "11555")
 
     env = env_builder.build_env(
