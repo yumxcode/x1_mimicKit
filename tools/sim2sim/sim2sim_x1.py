@@ -377,13 +377,16 @@ def run_sim2sim(args):
     sim.set_init(frames[0])
 
     n_steps = int(args.duration * FPS)
-    log = dict(t=[], root_z=[], root_pos=[], sole=[], dof_pos=[],
-               tau=[], pitch=[], roll=[])
+    log = dict(t=[], root_z=[], root_pos=[], root_rot=[], sole=[],
+               dof_pos=[], tau=[], pitch=[], roll=[])
 
     video_frames = []
     renderer = None
     if args.video:
-        renderer = mujoco.Renderer(sim.m, height=480, width=640)
+        # render with the ORIGINAL X1 mesh model (user requirement), synced
+        # to the physics state each step; physics stays on x1_sim.xml
+        from tools.sim2sim.render_traj import MeshRenderer
+        renderer = MeshRenderer(width=960, height=540)
 
     fallen = False
     foot_bodies = {sim.foot_bids["left"], sim.foot_bids["right"]}
@@ -416,6 +419,7 @@ def run_sim2sim(args):
         log["t"].append(step / FPS)
         log["root_z"].append(root_pos[2])
         log["root_pos"].append(root_pos.copy())
+        log["root_rot"].append(root_rot.copy())
         log["sole"].append(sole)
         log["dof_pos"].append(dof_pos.copy())
         log["tau"].append(sim.d.ctrl.copy())
@@ -440,14 +444,9 @@ def run_sim2sim(args):
             break
 
         if renderer is not None:
-            mujoco.mj_forward(sim.m, sim.d)
-            cam = renderer.camera
-            cam.lookat[:] = [root_pos[0] + 1.0, 0.0, 0.7]
-            cam.distance = 4.5
-            cam.azimuth = 90
-            cam.elevation = -10
-            renderer.update_scene(sim.d)
-            video_frames.append(renderer.render())
+            # sync mesh model to physics state and render
+            video_frames.append(renderer.render_frame(
+                root_pos, root_rot, dof_pos))
 
     # ---------------- metrics & gates
     T = np.array(log["t"])
@@ -557,6 +556,12 @@ def run_sim2sim(args):
     if args.json:
         with open(args.json, "w") as f:
             json.dump(report, f, indent=2, default=str)
+    # dump the rollout trajectory for offline mesh re-rendering
+    if getattr(args, "traj", None):
+        with open(args.traj, "wb") as f:
+            pickle.dump(dict(root_pos=np.array(log["root_pos"]),
+                             root_rot=np.array(log["root_rot"]),
+                             dof=np.array(log["dof_pos"])), f)
     return 0 if overall else 1
 
 
@@ -568,6 +573,8 @@ def main():
     ap.add_argument("--duration", type=float, default=30.0)
     ap.add_argument("--video", default=None)
     ap.add_argument("--json", default=None)
+    ap.add_argument("--traj", default=None,
+                    help="dump rollout trajectory pkl for re-rendering")
     ap.add_argument("--src-cadence", type=float, default=None,
                     help="source clip step cadence in Hz (from R1 report)")
     args = ap.parse_args()
