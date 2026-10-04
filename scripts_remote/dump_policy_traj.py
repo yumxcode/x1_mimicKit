@@ -46,6 +46,12 @@ def main():
     print(f"[dump] repo: {repo}", flush=True)
 
     import subprocess
+    try:
+        import diffusers  # noqa: F401
+    except ImportError:
+        subprocess.run([sys.executable, "-m", "pip", "install", "-q",
+                        "diffusers>=0.36.0"])
+
     usd = os.path.join(repo, "data/assets/x1/x1.usd")
     if not os.path.exists(usd):
         r = subprocess.run([sys.executable, "scripts_remote/convert_x1_usd.py"])

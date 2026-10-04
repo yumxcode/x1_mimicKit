@@ -62,14 +62,21 @@ def main():
         try:
             src = os.path.join(out_dir, "model.pt")
             if not os.path.exists(src):
+                src = os.path.join(out_dir, "model_train.pt")
+            if not os.path.exists(src):
                 return
-            dst = os.path.join(exp_dir, f"model_{tag}.pt")
-            n = 0
-            while os.path.exists(dst):
-                n += 1
-                dst = os.path.join(exp_dir, f"model_{tag}_{n}.pt")
-            shutil.copy2(src, dst)
-            print(f"[prior] published {dst}", flush=True)
+            # two channels: exported_data (index dir) + gm_play (SDK-doc
+            # scanned pt dir)
+            for base in (exp_dir,
+                         os.path.join("logs", "x1_prior", "gm_play")):
+                os.makedirs(base, exist_ok=True)
+                dst = os.path.join(base, f"model_{tag}.pt")
+                n = 0
+                while os.path.exists(dst):
+                    n += 1
+                    dst = os.path.join(base, f"model_{tag}_{n}.pt")
+                shutil.copy2(src, dst)
+            print(f"[prior] published snapshot {tag}", flush=True)
         except Exception as e:
             print(f"[prior] watcher error: {e}", flush=True)
 
@@ -77,12 +84,16 @@ def main():
         last = -1
         while not stop.is_set():
             try:
-                src = os.path.join(out_dir, "model.pt")
-                if os.path.exists(src):
-                    mt = int(os.path.getmtime(src))
-                    if mt > last:
-                        _publish(time.strftime("%H%M%S"))
-                        last = mt
+                # during training the periodic weights live in model_train.pt
+                # (X1_FINAL_ONLY_SAVE); after the end they are in model.pt
+                for cand in (os.path.join(out_dir, "model.pt"),
+                             os.path.join(out_dir, "model_train.pt")):
+                    if os.path.exists(cand):
+                        mt = int(os.path.getmtime(cand))
+                        if mt > last:
+                            _publish(time.strftime("%H%M%S"))
+                            last = mt
+                        break
             except Exception as e:
                 print(f"[prior] watcher error: {e}", flush=True)
             stop.wait(120)
@@ -91,10 +102,12 @@ def main():
     th = threading.Thread(target=_watcher, args=(stop_evt,), daemon=True)
     th.start()
 
+    env = dict(os.environ, X1_FINAL_ONLY_SAVE="1")
     r = subprocess.run(
         [sys.executable, "tools/diffusion_model/train_tinymdm.py",
          "--cfg_path", "tools/diffusion_model/config/tinymdm_x1_multi_clip.yaml",
-         "--out_dir", out_dir, "--device", "cuda"])
+         "--out_dir", out_dir, "--device", "cuda"],
+        env=env)
     stop_evt.set()
     th.join(timeout=5)
     print(f"[prior] train exit {r.returncode}", flush=True)

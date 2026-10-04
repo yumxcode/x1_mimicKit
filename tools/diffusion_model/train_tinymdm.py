@@ -143,6 +143,10 @@ def train(cfg_path, out_dir=None, device="cuda"):
     num_iters = config['num_iterations']
     curr_iters = 0
     loss_sum = 0
+    # X1_FINAL_ONLY_SAVE: platform uploads files at FIRST detection and
+    # ignores overwrites - model.pt must be written exactly once at the end
+    final_only = os.environ.get("X1_FINAL_ONLY_SAVE", "0") == "1"
+    train_model_file = out_model_file if not final_only else os.path.join(out_dir, "model_train.pt")
 
     while curr_iters < num_iters:
         samples = dataset_env.fetch_obs_demo(batch_size).clone().detach()
@@ -164,7 +168,7 @@ def train(cfg_path, out_dir=None, device="cuda"):
             model.eval()
             generate(model, dataset_env, obs_space, config, device, out_motion_dir=out_motion_dir,
                     enable_ema=model.model_ema, num_samples=16)
-            torch.save(model.state_dict(), out_model_file)
+            torch.save(model.state_dict(), train_model_file)
             model.train()
 
             log.log("Iteration", curr_iters, collection="0_Main")
@@ -175,6 +179,10 @@ def train(cfg_path, out_dir=None, device="cuda"):
             loss_sum = 0
 
         curr_iters += 1
+
+    if final_only:
+        torch.save(model.state_dict(), out_model_file)
+        print(f"[tinymdm] FINAL_ONLY_SAVE: wrote final weights to {out_model_file}", flush=True)
 
     return
 

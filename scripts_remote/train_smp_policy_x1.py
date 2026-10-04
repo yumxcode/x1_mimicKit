@@ -77,19 +77,27 @@ def main():
     os.makedirs(exp_dir, exist_ok=True)
 
     def _publish_once(tag):
-        """Copy the newest model snapshot into the SDK-scanned dir with a
-        UNIQUE file name each time (SDK uploads only newly-detected files;
-        overwriting an existing name silently skips the upload)."""
+        """Copy the newest weights into SDK-scanned dirs (unique names)."""
         try:
             src = os.path.join(out_dir, "model.pt")
-            if os.path.exists(src):
-                dst = os.path.join(exp_dir, f"model_{tag}.pt")
+            if not os.path.exists(src):
+                # X1_FINAL_ONLY_SAVE: during training only int_models exist
+                ints = sorted(glob.glob(
+                    os.path.join(out_dir, "int_models", "model_*.pt")))
+                if ints:
+                    src = ints[-1]
+            if not os.path.exists(src):
+                return
+            for base in (exp_dir,
+                         os.path.join("logs", "x1_smp_policy", "gm_play")):
+                os.makedirs(base, exist_ok=True)
+                dst = os.path.join(base, f"model_{tag}.pt")
                 n = 0
                 while os.path.exists(dst):
                     n += 1
-                    dst = os.path.join(exp_dir, f"model_{tag}_{n}.pt")
+                    dst = os.path.join(base, f"model_{tag}_{n}.pt")
                 shutil.copy2(src, dst)
-                print(f"[policy] watcher published {dst}", flush=True)
+            print(f"[policy] watcher published snapshot {tag}", flush=True)
         except Exception as e:
             print(f"[policy] watcher error: {e}", flush=True)
 
@@ -115,7 +123,7 @@ def main():
     th.start()
 
     # CUDA_LAUNCH_BLOCKING only when POLICY_DEBUG=1: it costs ~3x speed
-    env = dict(os.environ)
+    env = dict(os.environ, X1_FINAL_ONLY_SAVE="1")
     if os.environ.get("POLICY_DEBUG", "0") == "1":
         env["CUDA_LAUNCH_BLOCKING"] = "1"
 

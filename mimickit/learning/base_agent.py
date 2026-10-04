@@ -68,15 +68,15 @@ class BaseAgent(torch.nn.Module):
 
         while self._sample_count < max_samples:
             train_info = self._train_iter()
-            
+
             self._sample_count = self._update_sample_count()
             output_iter = (self._iter % self._iters_per_output == 0) or (self._sample_count >= max_samples)
 
             if (output_iter):
                 test_info = self.test_model(self._test_episodes)
-            
+
             env_diag_info = self._env.record_diagnostics()
-            self._log_train_info(train_info, test_info, env_diag_info, start_time) 
+            self._log_train_info(train_info, test_info, env_diag_info, start_time)
             self._logger.print_log()
 
             if (output_iter):
@@ -85,8 +85,16 @@ class BaseAgent(torch.nn.Module):
 
                 self._train_return_tracker.reset()
                 self._curr_obs, self._curr_info = self._reset_envs()
-            
+
             self._iter += 1
+
+        # X1_FINAL_ONLY_SAVE: never write model.pt during training (the
+        # training platform uploads a file at FIRST detection and ignores
+        # later overwrites - periodic saves therefore ship stale early
+        # weights). Write it exactly once here, with final weights.
+        if (os.environ.get("X1_FINAL_ONLY_SAVE", "0") == "1"):
+            if (mp_util.is_root_proc()):
+                self.save(out_model_file)
 
         return
 
@@ -422,7 +430,10 @@ class BaseAgent(torch.nn.Module):
         return loss
 
     def _output_train_model(self, iter, out_model_file, int_out_dir):
-        self.save(out_model_file)
+        # X1_FINAL_ONLY_SAVE: skip the shared-name model.pt during training
+        # (see train_model); only the uniquely-named int model is written
+        if (not (os.environ.get("X1_FINAL_ONLY_SAVE", "0") == "1")):
+            self.save(out_model_file)
 
         if (int_out_dir != ""):
             int_model_file = os.path.join(int_out_dir, "model_{:010d}.pt".format(iter))
