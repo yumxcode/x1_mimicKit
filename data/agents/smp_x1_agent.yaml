@@ -18,7 +18,7 @@ critic_optimizer:
 
 discount: 0.99
 steps_per_iter: 32
-iters_per_output: 100
+iters_per_output: 5000  # r11: > total iters, so the ONLY model.pt write is the final one (SDK first-.pt slot)
 test_episodes: 32
 normalizer_samples: 100000000
 use_mixed_precision: false
