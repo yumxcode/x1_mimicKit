@@ -66,6 +66,7 @@ class BaseAgent(torch.nn.Module):
         self._curr_obs, self._curr_info = self._reset_envs()
         self._init_train()
 
+        test_info = dict()  # r12: initialized - iter-0 no longer sets it
         while self._sample_count < max_samples:
             train_info = self._train_iter()
             
