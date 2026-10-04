@@ -175,6 +175,7 @@ class SMPAgent(ppo_agent.PPOAgent):
         self._exp_buffer.set_data_flat("reward", r)
 
         info = {
+            "task_reward_mean": torch.mean(task_r),
             "smp_reward_mean": smp_reward_mean,
             "smp_reward_std": smp_reward_std
         }
