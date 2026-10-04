@@ -81,6 +81,46 @@ def main():
     sdk_dir = os.path.join(repo, "output")
     os.makedirs(sdk_dir, exist_ok=True)
 
+    # r7 fix: image-335 SDK registers only the FIRST .pt in model list
+    # (empirical: r4/r6 lost all but initial model.pt; image-1 tasks like
+    # TASK_20260929_110 registered 20). Git-branch relay is the proven
+    # fallback (x1_policy_*.pt in main arrived this way).
+    relay_dir = os.path.join(repo, "relay")
+    os.makedirs(relay_dir, exist_ok=True)
+    relay_state = {"pushed": set()}
+
+    def _git(cmd):
+        r = subprocess.run(cmd, cwd=repo, capture_output=True, text=True)
+        return r.returncode, (r.stdout + r.stderr).strip()
+
+    def _git_relay(tag):
+        """Copy current model.pt to relay/ and push branch dm/weights-relay."""
+        if tag in relay_state["pushed"]:
+            return
+        src_f = os.path.join(out_dir, "model.pt")
+        if not os.path.exists(src_f):
+            return
+        try:
+            dst = os.path.join(relay_dir, f"model_{tag}.pt")
+            shutil.copy2(src_f, dst)
+            cmds = [
+                ["git", "config", "user.email", "relay@gradmotion"],
+                ["git", "config", "user.name", "weights-relay"],
+                ["git", "add", "-f", "relay/"],
+                ["git", "commit", "-m", f"weights relay: {tag}"],
+                ["git", "push", "-u", "origin", f"HEAD:refs/heads/dm/weights-relay-{tag}"],
+            ]
+            for c in cmds:
+                rc, out = _git(c)
+                print(f"[relay] {' '.join(c[:3])} rc={rc} {out[:160]}", flush=True)
+                if rc != 0 and c[1] != "commit":
+                    print(f"[relay] FAILED at {c[1]}", flush=True)
+                    return
+            relay_state["pushed"].add(tag)
+            print(f"[relay] pushed {dst}", flush=True)
+        except Exception as e:
+            print(f"[relay] error: {e}", flush=True)
+
     def _publish_once(tag):
         """Copy the newest model snapshot into the SDK-scanned dir with a
         UNIQUE file name each time (SDK uploads only newly-detected files;
@@ -100,6 +140,8 @@ def main():
         except Exception as e:
             print(f"[policy] watcher error: {e}", flush=True)
 
+    _ticks = [0]
+
     def _watcher(stop):
         # publish a snapshot every 10 min so a hard kill (OOM/node loss)
         # never loses more than 10 min of training
@@ -115,6 +157,9 @@ def main():
             except Exception as e:
                 print(f"[policy] watcher error: {e}", flush=True)
             stop.wait(600)
+            _ticks[0] += 1
+            if _ticks[0] == 9:
+                _git_relay("mid")
 
     import threading
     stop_evt = threading.Event()
@@ -147,6 +192,7 @@ def main():
     stop_evt.set()
     th.join(timeout=5)
     _publish_once("final")
+    _git_relay("final")
     print(f"[policy] train exit {r.returncode}", flush=True)
 
     # ---- post-train survival eval (in-training physics): mean episode
