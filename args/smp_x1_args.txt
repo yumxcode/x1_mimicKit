@@ -1,8 +1,8 @@
 --mode train
 --num_envs 4096
 --visualize false
---max_samples 200000000
---save_int_models true
+--max_samples 300000000
+--save_int_models false
 
 --engine_config data/engines/isaac_lab_engine.yaml
 --env_config data/envs/smp_x1_env.yaml
