@@ -18,7 +18,7 @@ critic_optimizer:
 
 discount: 0.99
 steps_per_iter: 32
-iters_per_output: 2000  # r15: restore mid-run eval/reset semantics (write still final-only, see base_agent r15 patch)
+iters_per_output: 100  # r16 (idear-0012 I41): restore FULL r4 training semantics (test + global RSI reset every 100 iters); disk write remains final-only via base_agent decoupling
 test_episodes: 32
 normalizer_samples: 100000000
 use_mixed_precision: false
