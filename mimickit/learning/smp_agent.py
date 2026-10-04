@@ -215,6 +215,11 @@ class SMPAgent(ppo_agent.PPOAgent):
             sds_info = dict()
             sds_info["sds_loss_mean"] = torch.mean(mean_sds_loss)
             sds_info["sds_loss_std"] = torch.std(mean_sds_loss)
+            # I34 (idear-0010): the DiffNormalizer mean is a lifetime
+            # cumulative average -> Smp_Reward absolute values are not
+            # comparable across runs. Log mu so raw L and L/mu can be read.
+            sds_info["sds_norm_mu"] = torch.mean(
+                self._sds_normalizer.get_abs_mean())
         
         return smp_r, sds_info
 
