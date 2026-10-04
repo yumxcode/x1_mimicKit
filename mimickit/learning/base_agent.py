@@ -88,7 +88,11 @@ class BaseAgent(torch.nn.Module):
 
             if (output_iter):
                 self._logger.write_log()
-                self._output_train_model(self._iter, out_model_file, int_out_dir)
+                # r15: mid-run output_iters now restore eval/reset semantics
+                # (test_model + _reset_envs below) WITHOUT writing any .pt -
+                # disk write only at the final iteration (first-slot channel).
+                if (self._sample_count >= max_samples):
+                    self._output_train_model(self._iter, out_model_file, int_out_dir)
 
                 self._train_return_tracker.reset()
                 self._curr_obs, self._curr_info = self._reset_envs()
