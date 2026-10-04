@@ -51,9 +51,21 @@ def main():
     try:
         import diffusers  # noqa: F401
     except ImportError:
-        r = subprocess.run([sys.executable, "-m", "pip", "install", "-q",
-                            "diffusers>=0.36.0"])
-        assert r.returncode == 0, "pip install diffusers failed"
+        # image-1 containers cannot reach pypi.org (SSL EOF, r8 lesson);
+        # use CN mirrors with fallback
+        mirrors = [
+            "https://pypi.tuna.tsinghua.edu.cn/simple",
+            "https://mirrors.aliyun.com/pypi/simple/",
+        ]
+        ok = False
+        for m in mirrors:
+            r = subprocess.run([sys.executable, "-m", "pip", "install", "-q",
+                                "--timeout", "60", "--retries", "3",
+                                "-i", m, "diffusers>=0.36.0"])
+            if r.returncode == 0:
+                ok = True
+                break
+        assert ok, "pip install diffusers failed on all mirrors"
 
     prior_model = os.path.join(repo, "data/models/smp_priors/x1_prior.pt")
     prior_cfg = os.path.join(
