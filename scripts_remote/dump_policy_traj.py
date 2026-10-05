@@ -94,7 +94,8 @@ def main():
     agent.load_state_dict(state)
     agent._sync_optimizer()
     agent.eval()
-    agent.set_mode(1)  # TEST
+    from learning.base_agent import AgentMode
+    agent.set_mode(AgentMode.TEST)
 
     eng = env._engine
     char_id = env._get_char_id()
