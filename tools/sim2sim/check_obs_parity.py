@@ -76,7 +76,8 @@ def main():
 
     # ---------- sim2sim-side obs: set sim state = frame 0 and build
     frame = frames[frame_idx]
-    sim.set_init(frame)
+    fi1 = min(frame_idx + 1, len(frames) - 1)
+    sim.set_init(frame, frames[fi1], fps=float(d['fps']))
     # note: dof_vel from motion at t=0 may be nonzero; sim set_init zeroes
     # velocities, so compare the pose-dependent segments and report vel
     # segments separately.

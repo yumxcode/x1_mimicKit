@@ -223,6 +223,30 @@ class X1Sim:
                           for s in ("left", "right")}
         self.foot_bids = {s: self.m.body(f"{s}_ankle_roll_link").id
                           for s in ("left", "right")}
+        # MimicKit char model (joint axis/quat conventions used by the
+        # TRAINING side for motion dof velocities); lazy torch import
+        import torch
+        sys.path.insert(0, str(REPO_ROOT / "mimickit"))
+        import anim.mjcf_char_model as mjcf_cm
+        self._cm = mjcf_cm.MJCFCharModel(torch.device("cpu"))
+        self._cm.load(str(X1_ASSET))
+        self._cm_axes = np.array([
+            self._cm.get_joint(j).axis
+            for j in range(1, self._cm.get_num_joints())])
+
+    def _motion_dof_vel(self, a0, a1, dt):
+        """dof velocities EXACTLY as motion_lib.compute_frame_dof_vel:
+        quat_pos'd char-model rotations, quat delta, expmap, projected on
+        the char model's per-joint axis."""
+        import torch
+        import util.torch_util as tu
+        q0 = self._cm.dof_to_rot(torch.tensor(a0, dtype=torch.float32))
+        q1 = self._cm.dof_to_rot(torch.tensor(a1, dtype=torch.float32))
+        q0 = tu.quat_pos(q0)  # canonical double-cover (w >= 0)
+        q1 = tu.quat_pos(q1)
+        drot = tu.quat_mul(tu.quat_conjugate(q0), q1)
+        em = tu.quat_to_exp_map(drot).numpy() / dt  # (29, 3)
+        return np.sum(self._cm_axes * em, axis=1)
 
     def _setup_implicit_pd(self, mujoco):
         """Convert torque motors to MuJoCo position servos with joint-level
@@ -271,9 +295,11 @@ class X1Sim:
 
         if next_frame is not None:
             dt = 1.0 / fps
-            # root linear velocity (world axes)
+            # root linear velocity (world axes) - forward difference
             self.d.qvel[0:3] = (next_frame[0:3] - frame[0:3]) / dt
-            # root angular velocity: quat difference -> world-frame omega
+            # root angular velocity: world-frame omega from the SHORTEST
+            # rotation between the two quats (wrap-safe, matches training
+            # quat_diff+exp_map; naive 2*atan2 can spike by 2*pi/dt)
             q1 = q
             exp2 = next_frame[3:6]
             ang2 = np.linalg.norm(exp2)
@@ -282,17 +308,21 @@ class X1Sim:
             else:
                 q2 = axis_angle_to_quat(exp2 / ang2, ang2)
             dq = quat_mul(q2, np.r_[q1[0], -q1[1:]])  # q2 * conj(q1), wxyz
-            dexp = 2.0 * np.arctan2(np.linalg.norm(dq[1:]), dq[0]) * \
-                (dq[1:] / max(np.linalg.norm(dq[1:]), 1e-9))
-            omega_world = dexp / dt
-            # MuJoCo freejoint angular velocity is in the BODY frame
-            R = self.d.xmat[self.base_bid].reshape(3, 3) if False else None
+            # canonical sign (quat_pos): positive w -> shortest rotation
+            if dq[0] < 0:
+                dq = -dq
+            n = np.linalg.norm(dq[1:])
+            angle = 2.0 * np.arctan2(n, dq[0])
+            if angle > np.pi:  # wrap to [-pi, pi]
+                angle -= 2.0 * np.pi
+            omega_world = (angle / max(n, 1e-9)) * dq[1:] / dt
             mujoco.mj_forward(self.m, self.d)
             R = self.d.xmat[self.base_bid].reshape(3, 3)
             self.d.qvel[3:6] = R.T @ omega_world
-            # dof velocities
-            self.d.qvel[self.vadr] = (next_frame[6:6 + 29]
-                                      - frame[6:6 + 29]) / dt
+            # dof velocities: via the char model's exact convention
+            a0 = frame[6:6 + 29]
+            a1 = next_frame[6:6 + 29]
+            self.d.qvel[self.vadr] = self._motion_dof_vel(a0, a1, dt)
         mujoco.mj_forward(self.m, self.d)
 
     def state(self):
