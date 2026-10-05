@@ -128,7 +128,7 @@ def main():
         steps += 1
 
         if (done[0] != 0).item():
-            out = os.path.join(exp_dir, f"traj_ep{ep}.pkl")
+            out = os.path.join(exp_dir, f"traj_ep{ep}.pt")
             with open(out, "wb") as f:
                 pickle.dump({k: np.array(v) for k, v in tr.items()}, f)
             print(f"[dump] episode {ep}: {len(tr['t'])} steps -> {out}",
@@ -140,7 +140,7 @@ def main():
 
     # final partial episode if any
     if tr["t"]:
-        out = os.path.join(exp_dir, f"traj_ep{ep}.pkl")
+        out = os.path.join(exp_dir, f"traj_ep{ep}.pt")
         with open(out, "wb") as f:
             pickle.dump({k: np.array(v) for k, v in tr.items()}, f)
         print(f"[dump] episode {ep} (partial): {len(tr['t'])} steps -> {out}",
