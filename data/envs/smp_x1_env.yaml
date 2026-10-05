@@ -73,7 +73,7 @@ joint_err_w: [1.0, 1.0, 1.0,
 reward_pose_w: 0.5
 reward_vel_w: 0.1
 reward_root_pose_w: 0.15
-reward_root_vel_w: 0.3  # r21 (idear-0013 I46-alpha): velocity-share rebalance - r20 phenotype showed v 0.72 vs data band 0.97-1.52 as clearest single actionable gap
+reward_root_vel_w: 0.1
 reward_key_pos_w: 0.15
 
 reward_pose_scale: 0.25
