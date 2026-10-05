@@ -178,6 +178,16 @@ class SMPAgent(ppo_agent.PPOAgent):
         # blocks). Snapshot the pure task mean BEFORE the overwrite.
         task_reward_mean = torch.mean(task_r.clone())
 
+        # r18 P0 runtime diagnosis: print raw task reward samples for the
+        # first 3 iters (BEFORE the overwrite) to localize why the env task
+        # channel reads ~0 at runtime while the kernel is healthy offline.
+        if (getattr(self, "_iter", 0) < 3):
+            _t = task_r.detach().cpu().numpy()
+            print(f"[P0diag] iter {getattr(self, '_iter', 0)}: task_r[:5]="
+                  f"{_t[:5].tolist()} mean={float(_t.mean()):.6f} "
+                  f"max={float(_t.max()):.4f} min={float(_t.min()):.4f}",
+                  flush=True)
+
         r = self._task_reward_weight * task_r + self._smp_reward_weight * smp_r
         self._exp_buffer.set_data_flat("reward", r)
 
