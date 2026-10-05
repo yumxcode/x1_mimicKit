@@ -251,7 +251,11 @@ class X1Sim:
             self.m.actuator_biasprm[i, 2] = 0.0
             self.m.actuator_ctrllimited[i] = 0
 
-    def set_init(self, frame):
+    def set_init(self, frame, next_frame=None, fps=30.0):
+        """Init state from a motion frame. When next_frame is given, also
+        set root/dof VELOCITIES from finite differences - training resets
+        initialize from mid-motion states WITH velocities; starting at rest
+        puts the policy off-distribution in the obs velocity segments."""
         import mujoco
         mujoco.mj_resetData(self.m, self.d)
         self.d.qpos[0:3] = frame[0:3]
@@ -264,6 +268,31 @@ class X1Sim:
             q = axis_angle_to_quat(axis, ang)
         self.d.qpos[3:7] = q  # wxyz freejoint
         self.d.qpos[self.qadr] = frame[6:6 + 29]
+
+        if next_frame is not None:
+            dt = 1.0 / fps
+            # root linear velocity (world axes)
+            self.d.qvel[0:3] = (next_frame[0:3] - frame[0:3]) / dt
+            # root angular velocity: quat difference -> world-frame omega
+            q1 = q
+            exp2 = next_frame[3:6]
+            ang2 = np.linalg.norm(exp2)
+            if ang2 < 1e-8:
+                q2 = np.array([1.0, 0, 0, 0])
+            else:
+                q2 = axis_angle_to_quat(exp2 / ang2, ang2)
+            dq = quat_mul(q2, np.r_[q1[0], -q1[1:]])  # q2 * conj(q1), wxyz
+            dexp = 2.0 * np.arctan2(np.linalg.norm(dq[1:]), dq[0]) * \
+                (dq[1:] / max(np.linalg.norm(dq[1:]), 1e-9))
+            omega_world = dexp / dt
+            # MuJoCo freejoint angular velocity is in the BODY frame
+            R = self.d.xmat[self.base_bid].reshape(3, 3) if False else None
+            mujoco.mj_forward(self.m, self.d)
+            R = self.d.xmat[self.base_bid].reshape(3, 3)
+            self.d.qvel[3:6] = R.T @ omega_world
+            # dof velocities
+            self.d.qvel[self.vadr] = (next_frame[6:6 + 29]
+                                      - frame[6:6 + 29]) / dt
         mujoco.mj_forward(self.m, self.d)
 
     def state(self):
@@ -374,7 +403,8 @@ def run_sim2sim(args):
     frames = np.array(mot["frames"])
 
     sim = X1Sim(spec)
-    sim.set_init(frames[0])
+    sim.set_init(frames[0], frames[1] if len(frames) > 1 else None,
+                 fps=float(mot["fps"]))
 
     n_steps = int(args.duration * FPS)
     log = dict(t=[], root_z=[], root_pos=[], root_rot=[], sole=[],
