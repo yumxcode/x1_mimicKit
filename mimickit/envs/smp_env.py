@@ -1,6 +1,7 @@
 import torch
 
 import envs.amp_env as amp_env
+import envs.deepmimic_env as deepmimic_env
 import learning.experience_buffer as experience_buffer
 import util.torch_util as torch_util
 
@@ -14,6 +15,17 @@ class SMPEnv(amp_env.AMPEnv):
                          record_video=record_video)
 
         self._gsi_buffer = None
+        return
+
+    def _update_reward(self):
+        # I51 fix (idear-0015 root cause): AMPEnv._update_reward is an
+        # EMPTY override (return-only) - the SMPEnv->AMPEnv->DeepMimicEnv
+        # MRO resolved sim_env's _post_physics_step call to that empty
+        # shell, so _reward_buf stayed zero forever and task_weight=0.5
+        # never had an effect (r4-r18 all trained pure-SMP; confirmed by
+        # r18 instrumentation: Task_Reward_Mean=0.000 with fixed logging).
+        # Bypass the AMP stub and run the DeepMimic tracking reward.
+        deepmimic_env.DeepMimicEnv._update_reward(self)
         return
 
     def init_gsi_buffer(self, gsi_samples):
