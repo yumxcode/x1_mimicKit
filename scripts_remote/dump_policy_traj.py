@@ -108,7 +108,8 @@ def main():
     ep = 0
     obs, info = env.reset()
     steps = 0
-    tr = dict(root_pos=[], root_rot=[], dof=[], t=[])
+    tr = dict(root_pos=[], root_rot=[], dof=[], t=[], obs=[])
+    tr["obs"].append(np.asarray(obs[0].cpu().numpy()))
     tr["init"] = dict(
         root_pos=eng.get_root_pos(char_id)[0].cpu().numpy().copy(),
         root_rot=eng.get_root_rot(char_id)[0].cpu().numpy().copy(),
@@ -132,6 +133,7 @@ def main():
         tr["root_rot"].append(root_rot.copy())
         tr["dof"].append(dof.copy())
         tr["t"].append(steps / 30.0)
+        tr["obs"].append(np.asarray(obs[0].cpu().numpy()))
         steps += 1
 
         if (done[0] != 0).item():
@@ -142,8 +144,9 @@ def main():
                   flush=True)
             ep += 1
             total_eps += 1
-            tr = dict(root_pos=[], root_rot=[], dof=[], t=[])
+            tr = dict(root_pos=[], root_rot=[], dof=[], t=[], obs=[])
             obs, info = env.reset()
+            tr["obs"].append(np.asarray(obs[0].cpu().numpy()))
             tr["init"] = dict(
                 root_pos=eng.get_root_pos(char_id)[0].cpu().numpy().copy(),
                 root_rot=eng.get_root_rot(char_id)[0].cpu().numpy().copy(),
