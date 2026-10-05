@@ -146,7 +146,7 @@ def main():
         print(f"[dump] episode {ep} (partial): {len(tr['t'])} steps -> {out}",
               flush=True)
 
-    n = len(glob.glob(os.path.join(exp_dir, "traj_ep*.pkl")))
+    n = len(glob.glob(os.path.join(exp_dir, "traj_ep*.pt")))
     print(f"[dump] RESULT: {'PASS' if n > 0 else 'FAIL'} ({n} episodes)",
           flush=True)
     sys.exit(0 if n > 0 else 1)
