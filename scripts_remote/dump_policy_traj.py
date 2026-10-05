@@ -109,6 +109,13 @@ def main():
     obs, info = env.reset()
     steps = 0
     tr = dict(root_pos=[], root_rot=[], dof=[], t=[])
+    tr["init"] = dict(
+        root_pos=eng.get_root_pos(char_id)[0].cpu().numpy().copy(),
+        root_rot=eng.get_root_rot(char_id)[0].cpu().numpy().copy(),
+        dof=eng.get_dof_pos(char_id)[0].cpu().numpy().copy(),
+        root_vel=eng.get_root_vel(char_id)[0].cpu().numpy().copy(),
+        root_ang_vel=eng.get_root_ang_vel(char_id)[0].cpu().numpy().copy(),
+        dof_vel=eng.get_dof_vel(char_id)[0].cpu().numpy().copy())
     max_steps = int(10 * 30)  # 10 s @ 30 Hz
 
     while total_eps < n_eps and steps < max_steps * n_eps:
@@ -137,6 +144,13 @@ def main():
             total_eps += 1
             tr = dict(root_pos=[], root_rot=[], dof=[], t=[])
             obs, info = env.reset()
+            tr["init"] = dict(
+                root_pos=eng.get_root_pos(char_id)[0].cpu().numpy().copy(),
+                root_rot=eng.get_root_rot(char_id)[0].cpu().numpy().copy(),
+                dof=eng.get_dof_pos(char_id)[0].cpu().numpy().copy(),
+                root_vel=eng.get_root_vel(char_id)[0].cpu().numpy().copy(),
+                root_ang_vel=eng.get_root_ang_vel(char_id)[0].cpu().numpy().copy(),
+                dof_vel=eng.get_dof_vel(char_id)[0].cpu().numpy().copy())
 
     # final partial episode if any
     if tr["t"]:
