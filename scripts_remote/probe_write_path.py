@@ -204,6 +204,59 @@ def main():
               % (type(e).__name__, e), flush=True)
     print("WRITE_RESULT D done", flush=True)
 
+    # --- test E: does set_joint_effort_target reach physics?
+    try:
+        pos = torch.tensor(home_full, device=dev).unsqueeze(0)
+        obj.write_joint_state_to_sim_index(position=pos,
+                                           velocity=torch.zeros_like(pos))
+        obj.write_root_link_pose_to_sim_index(
+            root_pose=torch.tensor([[0.0, 0.0, 0.8, 1.0, 0.0, 0.0, 0.0]],
+                                   device=dev))
+        obj.write_root_link_velocity_to_sim_index(
+            root_velocity=torch.zeros(1, 6, device=dev))
+        ci = 17
+        tau = torch.zeros(1, 29, device=dev)
+        tau[0, ci] = 50.0  # 50 Nm on left_hip_pitch (common idx)
+        perm = eng._dof_order_sim2common[char_id].long()
+        obj.set_joint_effort_target(tau[:, perm])
+        eng.step()
+        obj.data.update(1.0 / 120.0)
+        q = obj.data.joint_pos[0].detach().cpu().numpy()
+        delta = q - home_full
+        top = np.argsort(-np.abs(delta))[:3]
+        print("WRITE E effort50 %-24s -> %s" % (
+            common_names[ci],
+            " | ".join("%s %+.4f" % (common_names[j], delta[j])
+                       for j in top)), flush=True)
+    except Exception as e:
+        print("WRITE E failed: %s: %s" % (type(e).__name__, e), flush=True)
+
+    # --- test F: inspect collection buffers after set_cmd
+    try:
+        coll = obj.actuators
+        pos = torch.tensor(home_full, device=dev).unsqueeze(0)
+        obj.write_joint_state_to_sim_index(position=pos,
+                                           velocity=torch.zeros_like(pos))
+        action = torch.tensor(home_full, device=dev).unsqueeze(0).clone()
+        action[0, 17] += 0.4
+        eng.set_cmd(char_id, action)
+        for bname in ("_joint_pos_target", "_joint_pos_target_sim",
+                      "_joint_effort_target", "_joint_effort_target_sim"):
+            buf = getattr(coll, bname, None)
+            if buf is None:
+                print("WRITE F %-24s absent" % bname, flush=True)
+                continue
+            try:
+                t = torch.as_tensor(np.asarray(buf))[0]
+                print("WRITE F %-24s head=%s nonzero=%d"
+                      % (bname, [round(float(v), 3) for v in t[:5].cpu()],
+                         int((t != 0).sum())), flush=True)
+            except Exception as e:
+                print("WRITE F %-24s read err %s" % (bname, e), flush=True)
+    except Exception as e:
+        print("WRITE F failed: %s: %s" % (type(e).__name__, e), flush=True)
+    print("WRITE_RESULT E/F done", flush=True)
+
 
 if __name__ == "__main__":
     main()
