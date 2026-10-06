@@ -46,18 +46,40 @@ def main():
     print(f"[dump] repo: {repo}", flush=True)
 
     import subprocess
+    # engine detection FIRST: import isaacgym before anything that may
+    # import torch transitively (diffusers), otherwise the import fails
+    engine_cfg = os.environ.get("X1_DUMP_ENGINE", "")
+    if not engine_cfg:
+        try:
+            import isaacgym  # noqa: F401
+            engine_cfg = "data/engines/isaac_gym_engine.yaml"
+        except ImportError:
+            engine_cfg = "data/engines/isaac_lab_engine.yaml"
+    print(f"[dump] engine: {engine_cfg}", flush=True)
+
     try:
         import diffusers  # noqa: F401
     except ImportError:
         subprocess.run([sys.executable, "-m", "pip", "install", "-q",
+                        "-i", "https://pypi.tuna.tsinghua.edu.cn/simple",
                         "diffusers>=0.36.0"])
+    for mod in ("gymnasium", "tensorboardX", "wandb", "moviepy"):
+        try:
+            __import__(mod)
+        except ImportError:
+            subprocess.run([sys.executable, "-m", "pip", "install", "-q",
+                            "-i",
+                            "https://pypi.tuna.tsinghua.edu.cn/simple",
+                            mod])
 
-    usd = os.path.join(repo, "data/assets/x1/x1.usd")
-    if not os.path.exists(usd):
-        r = subprocess.run([sys.executable, "scripts_remote/convert_x1_usd.py"])
-        if r.returncode != 0:
-            print("[dump] FAIL convert")
-            sys.exit(1)
+    if "isaac_lab" in engine_cfg:
+        usd = os.path.join(repo, "data/assets/x1/x1.usd")
+        if not os.path.exists(usd):
+            r = subprocess.run([sys.executable,
+                                "scripts_remote/convert_x1_usd.py"])
+            if r.returncode != 0 or not os.path.exists(usd):
+                print("[dump] FAIL convert")
+                sys.exit(1)
 
     policy = os.environ.get("X1_DUMP_POLICY", "")
     if not policy:
