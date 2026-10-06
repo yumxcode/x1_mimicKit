@@ -88,8 +88,18 @@ def main():
     rp = eng.get_root_pos(char_id)[0].cpu().numpy()
     print("AIR after reset-step root_pos:", rp.tolist(), flush=True)
 
+    # re-write a CLEAN state (home + zero velocities) so the measured
+    # step starts exactly like the local MuJoCo twin
+    eng.set_root_pos(None, char_id, torch.tensor([[0.0, 0.0, 0.8]], device=dev))
+    eng.set_root_rot(None, char_id, torch.tensor([[1.0, 0.0, 0.0, 0.0]], device=dev))
+    eng.set_dof_pos(None, char_id, torch.tensor(home, device=dev).unsqueeze(0))
+    eng.set_dof_vel(None, char_id, 0.0)
+    eng.set_root_vel(None, char_id, 0.0)
+    eng.set_root_ang_vel(None, char_id, 0.0)
+
     q0 = eng.get_dof_pos(char_id)[0].cpu().numpy()
     print("AIR q0 head:", q0[:5].tolist(), flush=True)
+    print("AIR qd0 max:", float(eng.get_dof_vel(char_id).abs().max()), flush=True)
     # measured step: command the offset action
     env.step(torch.tensor(action, dtype=torch.float32, device=dev).unsqueeze(0))
     q1 = eng.get_dof_pos(char_id)[0].cpu().numpy()
