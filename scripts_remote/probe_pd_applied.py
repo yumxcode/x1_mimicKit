@@ -83,16 +83,23 @@ def main():
                       eng._pd_eff_common.cpu().numpy())
 
     act = obj.actuators["actuators"]
+    from engines.isaac_lab_engine import _to_torch
     applied = None
     for attr in ("applied_effort", "computed_effort"):
         if hasattr(act, attr):
             try:
                 v = getattr(act, attr)
-                applied = eng._to_torch(v, eng._device)[0].cpu().numpy()
+                applied = _to_torch(v, eng._device)[0].cpu().numpy()
                 print("AIR using actuator attr:", attr, flush=True)
                 break
             except Exception as e:
                 print("AIR attr %s failed: %s" % (attr, e), flush=True)
+    # verify perm alignment explicitly
+    for ci in (0, 17, 18, 23):
+        si = int(perm[ci])
+        print("AIR align ci=%d %-28s -> si=%d %s" %
+              (ci, common_names[ci], si,
+               sim_names[si] if si < len(sim_names) else "?"), flush=True)
 
     # sim-order joint names from the articulation
     sim_names = list(obj.joint_names)
@@ -107,9 +114,10 @@ def main():
           flush=True)
     for ci in (0, 3, 6, 17, 18, 23, 24, 28):
         si = int(perm[ci])
-        ap = applied[si] if applied is not None else float('nan')
-        print("AIR %-28s exp_tau %+7.1f | applied[si=%d] %+7.1f | d %+.4f"
-              % (common_names[ci], tau_exp[ci], si, ap, delta[ci]),
+        ap_s = applied[si] if applied is not None else float('nan')
+        ap_c = applied[ci] if applied is not None else float('nan')
+        print("AIR %-28s exp %+6.0f | ap[si] %+7.1f ap[ci] %+7.1f | d %+.4f"
+              % (common_names[ci], tau_exp[ci], ap_s, ap_c, delta[ci]),
               flush=True)
     print("AIR delta mean %.4f" % np.abs(delta).mean(), flush=True)
     print("AIR RESULT: DONE", flush=True)
