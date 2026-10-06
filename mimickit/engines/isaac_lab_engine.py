@@ -281,15 +281,8 @@ class IsaacLabEngine(engine.Engine):
         elif (self._control_mode == engine.ControlMode.torque):
             obj.set_joint_effort_target(sim_cmd)
         elif (self._control_mode == engine.ControlMode.pd_explicit):
-            # manual explicit PD: torque = kp*(a - q) - kd*qd, clipped to
-            # effort limits - EXACTLY the MuJoCo sim2sim player law.
-            # NOTE: cmd and q/qd are all in COMMON (MimicKit) order here;
-            # only the final torque is permuted to sim order.
-            q = self.get_dof_pos(obj_id)
-            qd = self.get_dof_vel(obj_id)
-            tau = self._pd_kp_common * (cmd - q) - self._pd_kd_common * qd
-            tau = torch.clamp(tau, -self._pd_eff_common, self._pd_eff_common)
-            obj.set_joint_effort_target(tau[:, common2sim_idx])
+            # IsaacLab-native explicit PD consumes position targets
+            obj.set_joint_position_target(sim_cmd)
         else:
             assert(False), "Unsupported control mode: {}".format(self._control_mode)
         return
@@ -948,21 +941,17 @@ class IsaacLabEngine(engine.Engine):
             else:
                 actuator_cfg = IdealPDActuatorCfg(joint_names_expr=[".*"], stiffness=0, damping=0, effort_limit=None)
         elif (control_mode == engine.ControlMode.pd_explicit):
-            # IMPORTANT: position targets are NOT converted to efforts for
-            # explicit actuators by this IsaacLab version (silently dropped
-            # -> ragdoll). The engine computes torques itself in set_cmd;
-            # here we only need a pure effort passthrough with limits.
+            # IsaacLab-native explicit PD: actuator model computes
+            # tau = kp*(pos_target - q) - kd*qd, clipped at effort limits.
+            # (Position targets reach the actuator via set_cmd; an earlier
+            # "ragdoll" symptom was caused by the wrong dof permutation in
+            # set_cmd, not by the position-target pathway itself.)
             if gains is not None:
-                # cache common-order gains for set_cmd (single robot)
-                _, kps, kds, effs = gains
-                self._pd_kp_common = torch.tensor(kps, device=self._device, dtype=torch.float)
-                self._pd_kd_common = torch.tensor(kds, device=self._device, dtype=torch.float)
-                self._pd_eff_common = torch.tensor(effs, device=self._device, dtype=torch.float)
                 actuator_cfg = IdealPDActuatorCfg(
-                    joint_names_expr=[".*"], stiffness=0, damping=0,
-                    effort_limit=ef_dict)
+                    joint_names_expr=[".*"], stiffness=kp_dict,
+                    damping=kd_dict, effort_limit=ef_dict)
             else:
-                actuator_cfg = IdealPDActuatorCfg(joint_names_expr=[".*"], stiffness=0, damping=0, effort_limit=None)
+                actuator_cfg = IdealPDActuatorCfg(joint_names_expr=[".*"], stiffness=None, damping=None, effort_limit=None)
         else:
             assert(False), "Unsupported control mode: {}".format(self._control_mode)
 
