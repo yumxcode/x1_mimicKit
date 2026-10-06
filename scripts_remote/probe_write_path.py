@@ -289,6 +289,68 @@ def main():
         print("WRITE G failed: %s: %s" % (type(e).__name__, e), flush=True)
     print("WRITE_RESULT G done", flush=True)
 
+    # --- test H: internal target buffers + implicit flag after set_cmd
+    try:
+        pos = torch.tensor(home_full, device=dev).unsqueeze(0)
+        obj.write_joint_state_to_sim_index(position=pos,
+                                           velocity=torch.zeros_like(pos))
+        action = torch.tensor(home_full, device=dev).unsqueeze(0).clone()
+        action[0, 17] += 0.4
+        eng.set_cmd(char_id, action)
+        print("WRITE H _has_implicit_actuators:",
+              getattr(obj, "_has_implicit_actuators", "ABSENT"), flush=True)
+        print("WRITE H _has_explicit_actuators:",
+              getattr(obj, "_has_explicit_actuators", "ABSENT"), flush=True)
+        for bname in ("_joint_pos_target_sim", "_joint_effort_target_sim",
+                      "_joint_pos_target"):
+            buf = getattr(obj, bname, None)
+            if buf is None:
+                # maybe on the collection
+                coll0 = (obj.actuators["actuators"]
+                         if isinstance(obj.actuators, dict) else obj.actuators)
+                buf = getattr(coll0, bname, None)
+                if buf is not None:
+                    bname += " (on collection)"
+            if buf is None:
+                print("WRITE H %-28s ABSENT" % bname, flush=True)
+                continue
+            try:
+                t = torch.as_tensor(np.asarray(buf))
+                nz = int((t != 0).sum())
+                print("WRITE H %-28s shape=%s nonzero=%d max=%.3f"
+                      % (bname, tuple(t.shape), nz,
+                         float(t.abs().max())), flush=True)
+            except Exception as e:
+                print("WRITE H %-28s read err %s" % (bname, e), flush=True)
+        # does root_view have the setter?
+        rv = getattr(obj, "root_view", None)
+        print("WRITE H root_view has set_dof_position_targets:",
+              hasattr(rv, "set_dof_position_targets") if rv else "no root_view",
+              flush=True)
+        # apply targets MANUALLY via root_view and step
+        if rv is not None and hasattr(rv, "set_dof_position_targets"):
+            perm = eng._dof_order_sim2common[char_id].long()
+            tgt = action[:, perm].contiguous()
+            try:
+                import warp as wp
+                tgt_wp = wp.from_torch(tgt, dtype=wp.float32)
+                rv.set_dof_position_targets(tgt_wp, obj._ALL_INDICES)
+                print("WRITE H manual root_view set OK", flush=True)
+                eng.step()
+                obj.data.update(1.0 / 120.0)
+                q = obj.data.joint_pos[0].detach().cpu().numpy()
+                delta = q - home_full
+                top = np.argsort(-np.abs(delta))[:3]
+                print("WRITE H manual cmd17 -> %s" % (
+                    " | ".join("%s %+.4f" % (common_names[j], delta[j])
+                               for j in top)), flush=True)
+            except Exception as e:
+                print("WRITE H manual root_view failed: %s: %s"
+                      % (type(e).__name__, e), flush=True)
+    except Exception as e:
+        print("WRITE H failed: %s: %s" % (type(e).__name__, e), flush=True)
+    print("WRITE_RESULT H done", flush=True)
+
 
 if __name__ == "__main__":
     main()
