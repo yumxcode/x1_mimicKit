@@ -43,6 +43,13 @@ def main():
     if not os.path.exists(usd):
         subprocess.run([sys.executable, "scripts_remote/convert_x1_usd.py"])
 
+    import subprocess
+    try:
+        import gymnasium  # noqa: F401
+    except ImportError:
+        subprocess.run([sys.executable, "-m", "pip", "install", "-q",
+                        "gymnasium"])
+
     import numpy as np
     import torch
     import envs.env_builder as env_builder
