@@ -82,6 +82,15 @@ def main():
     tau_exp = np.clip(tau_exp, -eng._pd_eff_common.cpu().numpy(),
                       eng._pd_eff_common.cpu().numpy())
 
+    # sim-order joint names from the articulation
+    sim_names = list(obj.joint_names)
+    print("AIR sim joint order head:", sim_names[:6], flush=True)
+
+    from tools.x1_pipeline.retarget_g1_x1 import X1_DOF_ORDER
+    common_names = list(X1_DOF_ORDER)
+    perm = eng._dof_order_common2sim[char_id].cpu().numpy()
+    print("AIR common2sim perm head:", perm[:8].tolist(), flush=True)
+
     act = obj.actuators["actuators"]
     from engines.isaac_lab_engine import _to_torch
     applied = None
@@ -100,15 +109,6 @@ def main():
         print("AIR align ci=%d %-28s -> si=%d %s" %
               (ci, common_names[ci], si,
                sim_names[si] if si < len(sim_names) else "?"), flush=True)
-
-    # sim-order joint names from the articulation
-    sim_names = list(obj.joint_names)
-    print("AIR sim joint order head:", sim_names[:6], flush=True)
-
-    from tools.x1_pipeline.retarget_g1_x1 import X1_DOF_ORDER
-    common_names = list(X1_DOF_ORDER)
-    perm = eng._dof_order_common2sim[char_id].cpu().numpy()
-    print("AIR common2sim perm head:", perm[:8].tolist(), flush=True)
 
     print("\nAIR per-joint: expected(common) vs applied(sim) vs delta(common)",
           flush=True)
