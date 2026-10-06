@@ -335,11 +335,13 @@ def main():
             try:
                 gains = eng._parse_mjcf_gains("data/assets/x1/x1.xml")
                 names_g, kps_g, kds_g, effs_g = gains
-                kp_sim = torch.tensor(kps_g, device=dev, dtype=torch.float32)
-                kd_sim = torch.tensor(kds_g, device=dev, dtype=torch.float32)
+                kp_sim = torch.tensor(kps_g, device=dev,
+                                      dtype=torch.float32).unsqueeze(0)
+                kd_sim = torch.tensor(kds_g, device=dev,
+                                      dtype=torch.float32).unsqueeze(0)
                 perm = eng._dof_order_sim2common[char_id].long()
-                obj.write_joint_stiffness_to_sim(kp_sim[perm])
-                obj.write_joint_damping_to_sim(kd_sim[perm])
+                obj.write_joint_stiffness_to_sim(kp_sim[:, perm])
+                obj.write_joint_damping_to_sim(kd_sim[:, perm])
                 print("WRITE H gains written to sim explicitly", flush=True)
             except Exception as e:
                 print("WRITE H gain write failed: %s: %s"
