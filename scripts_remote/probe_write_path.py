@@ -110,6 +110,41 @@ def main():
     print("WRITE_RESULT A(engine set_dof_pos+step)=%s B(keyword API)=%s"
           % (verdict_a, verdict_b), flush=True)
 
+    # --- test C: ENGINE-level single-joint command (bypasses env.step)
+    home_leg_l = [0.48891, 0.06213, -0.33853, 0.63204, -0.27224, 0.0]
+    home_leg_r = [-0.48891, -0.06213, 0.33853, 0.63204, -0.27224, 0.0]
+    home_full = np.array([0.0] * 17 + home_leg_l + home_leg_r,
+                         dtype=np.float32)
+    common_names = ["lumbar_yaw_joint"]
+    from tools.x1_pipeline.retarget_g1_x1 import X1_DOF_ORDER
+    common_names = list(X1_DOF_ORDER)
+
+    for ci in (0, 17, 23, 6, 7):
+        # reset sim to a clean airborne home via keyword API
+        pos = torch.tensor(home_full, device=dev).unsqueeze(0)
+        vel = torch.zeros_like(pos)
+        obj.write_joint_state_to_sim_index(position=pos, velocity=vel)
+        obj.write_root_link_pose_to_sim_index(
+            root_pose=torch.tensor([[0.0, 0.0, 0.8, 1.0, 0.0, 0.0, 0.0]],
+                                   device=dev))
+        obj.write_root_link_velocity_to_sim_index(
+            root_velocity=torch.zeros(1, 6, device=dev))
+
+        action = torch.tensor(home_full, device=dev).unsqueeze(0).clone()
+        action[0, ci] += 0.4
+        eng.set_cmd(char_id, action)
+        eng.step()
+
+        obj.data.update(1.0 / 120.0)
+        q = obj.data.joint_pos[0].detach().cpu().numpy()
+        delta = q - home_full
+        top = np.argsort(-np.abs(delta))[:3]
+        print("WRITE C cmd %-28s -> %s" % (
+            common_names[ci],
+            " | ".join("%s %+.4f" % (common_names[j], delta[j])
+                       for j in top)), flush=True)
+    print("WRITE_RESULT C done", flush=True)
+
 
 if __name__ == "__main__":
     main()
