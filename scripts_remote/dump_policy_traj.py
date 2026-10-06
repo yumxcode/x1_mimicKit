@@ -146,10 +146,12 @@ def main():
             norm_obs = agent._obs_norm.normalize(obs)
             dist = agent._model.eval_actor(norm_obs)
             a = agent._a_norm.unnormalize(dist.mode)
+        tr.setdefault("action", []).append(
+            np.asarray(a[0].cpu().numpy()).copy())
         obs, r, done, info = env.step(a)
 
         root_pos = eng.get_root_pos(char_id)[0].cpu().numpy()
-        root_rot = eng.get_root_rot(char_id)[0].cpu().numpy()  # wxyz
+        root_rot = eng.get_root_rot(char_id)[0].cpu().numpy()  # xyzw (isaacgym raw)
         dof = eng.get_dof_pos(char_id)[0].cpu().numpy()
         tr["root_pos"].append(root_pos.copy())
         tr["root_rot"].append(root_rot.copy())
