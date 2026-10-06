@@ -997,16 +997,16 @@ class IsaacLabEngine(engine.Engine):
             if (cached is not None and gains is not None
                     and obj_id in cached):
                 try:
-                    import warp as wp
                     kp, kd, eff = gains[obj_id]
                     tgt = cached[obj_id]
                     q = self.get_dof_pos(obj_id)
                     tau = torch.clamp(kp * (tgt - q), -eff, eff)
                     tau_sim = tau[:, self._dof_order_sim2common[obj_id]]
-                    rv = obj.root_view
-                    tau_wp = wp.from_torch(tau_sim.contiguous(),
-                                           dtype=wp.float32)
-                    rv.set_dof_actuation_forces(tau_wp, obj._ALL_INDICES)
+                    # write_joint_effort_to_sim shares the (proven-working)
+                    # state-write convention; root_view expects a different
+                    # backend dof order (that mis-permutation saturated
+                    # wrong joints in the audit)
+                    obj.write_joint_effort_to_sim(tau_sim)
                 except Exception as e:
                     Logger.print("[isaac_lab_engine] torque push failed: "
                                  "{}".format(e))
