@@ -71,11 +71,12 @@ def main():
     # lift robot airborne, zero velocities
     home_leg_l = [0.48891, 0.06213, -0.33853, 0.63204, -0.27224, 0.0]
     home_leg_r = [-0.48891, -0.06213, 0.33853, 0.63204, -0.27224, 0.0]
+    dev = 'cuda:0'
     home = np.array([0.0] * 17 + home_leg_l + home_leg_r, dtype=np.float32)
 
-    eng.set_root_pos(None, char_id, torch.tensor([[0.0, 0.0, 0.8]]))
-    eng.set_root_rot(None, char_id, torch.tensor([[1.0, 0.0, 0.0, 0.0]]))
-    eng.set_dof_pos(None, char_id, torch.tensor(home).unsqueeze(0))
+    eng.set_root_pos(None, char_id, torch.tensor([[0.0, 0.0, 0.8]], device=dev))
+    eng.set_root_rot(None, char_id, torch.tensor([[1.0, 0.0, 0.0, 0.0]], device=dev))
+    eng.set_dof_pos(None, char_id, torch.tensor(home, device=dev).unsqueeze(0))
     eng.set_dof_vel(None, char_id, 0.0)
     eng.set_root_vel(None, char_id, 0.0)
     eng.set_root_ang_vel(None, char_id, 0.0)
@@ -85,7 +86,7 @@ def main():
 
     q0 = eng.get_dof_pos(char_id)[0].cpu().numpy()
     # step exactly one control step (env.step applies cmd + 4 sim steps)
-    env.step(torch.tensor(action, dtype=torch.float32).unsqueeze(0))
+    env.step(torch.tensor(action, dtype=torch.float32, device=dev).unsqueeze(0))
     q1 = eng.get_dof_pos(char_id)[0].cpu().numpy()
     delta = q1 - q0
     print("AIR delta (17 lumbar/arm, then legs):", flush=True)
