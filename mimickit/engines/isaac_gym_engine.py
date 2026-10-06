@@ -231,6 +231,18 @@ class IsaacGymEngine(engine.Engine):
         dof_props["driveMode"] = drive_mode
         self._modify_control_mode_dof_props(control_mode, dof_props)
 
+        # enforce effort limits on the drive: the MJCF importer may leave
+        # effortLimit huge, making DOF_MODE_POS track with effectively
+        # unlimited torque (verified: engine shoulder moves 0.48 rad in
+        # 33ms where the torque-limited twin moves 0.09). This is THE
+        # sim2sim actuator-semantics gap.
+        if (self.get_control_mode() == engine.ControlMode.pos):
+            dof_props["effortLimit"] = torque_lim.astype(np.float32)
+            Logger.print("[isaac_gym] pos drive effortLimit enforced "
+                         "from motor efforts: min {:.1f} max {:.1f}"
+                         .format(float(torque_lim.min()),
+                                 float(torque_lim.max())))
+
         self._gym.set_actor_dof_properties(env_ptr, obj_id, dof_props)
 
         if (color is not None):
