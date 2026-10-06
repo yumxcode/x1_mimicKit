@@ -490,6 +490,20 @@ class DeepMimicEnv(char_env.CharEnv):
                                          motion_len=motion_len,
                                          motion_len_term=motion_len_term,
                                          track_root=track_root)
+
+        # I64 (idear-0018): fail-cause bucketing for ep_len attribution.
+        # FAIL splits: contact-fall (sensor often blind), pose_fail (relative
+        # config >0.8m - falls express through this), plus a low-root-height
+        # proxy (root_z<0.3) that does not depend on the blind sensor.
+        # Observation-only; training path untouched.
+        fail_mask = (self._done_buf == base_env.DoneFlags.FAIL.value)
+        if (bool(fail_mask.any())):
+            root_pos_z = self._engine.get_root_pos(self._get_char_id())[..., 2]
+            low_root = root_pos_z < 0.3
+            n_fail = int(fail_mask.sum().item())
+            self._info["n_fail"] = n_fail
+            self._info["n_low_root_fail"] = int((fail_mask & low_root).sum().item())
+            self._info["n_pose_fail_only"] = int((fail_mask & ~low_root).sum().item())
         return
 
     def _update_info(self, env_ids=None):
