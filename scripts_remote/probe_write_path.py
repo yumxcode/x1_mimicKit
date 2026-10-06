@@ -145,6 +145,65 @@ def main():
                        for j in top)), flush=True)
     print("WRITE_RESULT C done", flush=True)
 
+    # --- test D: pos-mode runtime drive gains (implicit actuator)
+    act = obj.actuators["actuators"]
+    for attr in ("stiffness", "damping", "effort_limit"):
+        if hasattr(act, attr):
+            try:
+                v = getattr(act, attr)
+                from engines.isaac_lab_engine import _to_torch
+                t = _to_torch(v, dev)[0].cpu()
+                print("WRITE D %s head: %s min/max %.1f/%.1f"
+                      % (attr, t[:4].tolist(), float(t.min()), float(t.max())),
+                      flush=True)
+            except Exception as e:
+                print("WRITE D %s read failed: %s" % (attr, e), flush=True)
+    for meth in ("write_joint_stiffness_to_sim", "write_joint_damping_to_sim"):
+        print("WRITE D has %s: %s" % (meth, hasattr(obj, meth)), flush=True)
+    # if runtime gains are zero, write them explicitly and re-run test C once
+    try:
+        from engines.isaac_lab_engine import _to_torch
+        kp_now = _to_torch(act.stiffness, dev)[0]
+        if float(kp_now.max()) == 0.0:
+            print("WRITE D zero gains detected -> writing explicit", flush=True)
+            kp_common = torch.tensor(
+                [375.0] * 3 + [50.0] * 14 + [375.0] * 6 + [200.0, 375, 375, 450, 80, 80] * 1,
+                device=dev)[:29]
+            # use MJCF-parsed gains via engine helper
+            gains = eng._parse_mjcf_gains("data/assets/x1/x1.xml")
+            names_g, kps_g, kds_g, effs_g = gains
+            kp_sim = torch.tensor(kps_g, device=dev)
+            kd_sim = torch.tensor(kds_g, device=dev)
+            # map common->sim
+            perm = eng._dof_order_sim2common[char_id].long()
+            obj.write_joint_stiffness_to_sim(kp_sim[perm])
+            obj.write_joint_damping_to_sim(kd_sim[perm])
+            print("WRITE D wrote kp/kd via legacy methods", flush=True)
+            # re-run single-joint test
+            ci = 17
+            pos = torch.tensor(home_full, device=dev).unsqueeze(0)
+            obj.write_joint_state_to_sim_index(position=pos,
+                                               velocity=torch.zeros_like(pos))
+            obj.write_root_link_pose_to_sim_index(
+                root_pose=torch.tensor([[0.0, 0.0, 0.8, 1.0, 0.0, 0.0, 0.0]],
+                                       device=dev))
+            action = torch.tensor(home_full, device=dev).unsqueeze(0).clone()
+            action[0, ci] += 0.4
+            eng.set_cmd(char_id, action)
+            eng.step()
+            obj.data.update(1.0 / 120.0)
+            q = obj.data.joint_pos[0].detach().cpu().numpy()
+            delta = q - home_full
+            top = np.argsort(-np.abs(delta))[:3]
+            print("WRITE D retry cmd %-28s -> %s" % (
+                common_names[ci],
+                " | ".join("%s %+.4f" % (common_names[j], delta[j])
+                           for j in top)), flush=True)
+    except Exception as e:
+        print("WRITE D explicit-write path failed: %s: %s"
+              % (type(e).__name__, e), flush=True)
+    print("WRITE_RESULT D done", flush=True)
+
 
 if __name__ == "__main__":
     main()
