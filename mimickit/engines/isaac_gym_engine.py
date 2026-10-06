@@ -208,7 +208,9 @@ class IsaacGymEngine(engine.Engine):
             dof_props["stiffness"] = kp
             dof_props["damping"] = kd
             if ("effort" in dof_props.dtype.names):
-                dof_props["effort"] = (dof_props["effort"] * ef_s)
+                # base = MOTOR effort (the imported value may be
+                # unlimited), scaled per env
+                dof_props["effort"] = (torque_lim * ef_s).astype(np.float32)
             Logger.print("[isaac_gym] env {} PD rand kp x{:.3f} kd x{:.3f} "
                          "eff x{:.3f}".format(env_id, kp_s, kd_s, ef_s))
         
