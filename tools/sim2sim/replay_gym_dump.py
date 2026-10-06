@@ -7,6 +7,7 @@ isolates the dynamics/PD/action path (the policy is out of the loop).
 
 Run: .venv/bin/python tools/sim2sim/replay_gym_dump.py /tmp/traj_ep0.pt
 """
+import os
 import pickle
 import sys
 from pathlib import Path
@@ -23,6 +24,10 @@ from tools.sim2sim.sim2sim_x1 import (  # noqa: E402
 
 
 def set_exact(sim, init):
+    if isinstance(init, np.ndarray):
+        init = init.item()  # pickled as 0-d object array
+    init = {k: np.asarray(v, dtype=float).flatten()
+            for k, v in init.items()}
     mujoco.mj_resetData(sim.m, sim.d)
     sim.d.qpos[0:3] = init["root_pos"]
     # dump root_rot is xyzw (isaac_gym raw); MuJoCo freejoint wants wxyz
@@ -41,7 +46,10 @@ def set_exact(sim, init):
 def main():
     path = sys.argv[1] if len(sys.argv) > 1 else "/tmp/traj_ep0.pt"
     d = pickle.load(open(path, "rb"))
-    actions = np.asarray(d.get("action", []))
+    if os.environ.get("X1_REPLAY_HOLD"):
+        actions = np.tile(np.asarray(d["dof"])[0:1], (300, 1))
+    else:
+        actions = np.asarray(d.get("action", []))
     rp = np.asarray(d["root_pos"])
     dof = np.asarray(d["dof"])
     T = min(len(actions), len(rp) - 1)
@@ -54,6 +62,13 @@ def main():
     vel = parse_urdf_velocity()
     spec["vel_lim"] = np.array([vel[n] for n in spec["names"]])
     sim = X1Sim(spec)
+    if os.environ.get("X1_REPLAY_NOFRICTION"):
+        for jid in range(sim.m.njnt):
+            dofadr = sim.m.jnt_dofadr[jid]
+            if dofadr >= 0:
+                sim.m.dof_frictionloss[dofadr] = 0.0
+    if os.environ.get("X1_REPLAY_NOCLIP"):
+        sim.m.actuator_forcelimited[:] = 0
     set_exact(sim, d["init"])
 
     dz, dj = [], []

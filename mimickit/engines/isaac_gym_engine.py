@@ -81,6 +81,16 @@ class IsaacGymEngine(engine.Engine):
         self._obj_kd = [[] for i in range(num_envs)]
         self._obj_torque_lim = [[] for i in range(num_envs)]
 
+        # optional PD domain randomization (list of 6 scales:
+        # kp_lo, kp_hi, kd_lo, kd_hi, ef_lo, ef_hi)
+        self._pd_randomize = None
+        pd_rand = config.get("pd_randomize", None)
+        if (pd_rand is not None):
+            assert (len(pd_rand) == 6), "pd_randomize needs 6 entries"
+            self._pd_randomize = [float(v) for v in pd_rand]
+            Logger.print("[isaac_gym] PD domain randomization ON: {}"
+                         .format(self._pd_randomize))
+
         self._build_ground()
 
         if (visualize):
@@ -179,6 +189,28 @@ class IsaacGymEngine(engine.Engine):
         dof_props = self._gym.get_actor_dof_properties(env_ptr, obj_id)
         kp = dof_props["stiffness"]
         kd = dof_props["damping"]
+
+        # Per-env PD domain randomization (sim2sim robustness): scale
+        # stiffness/damping/effort per env within configured bounds. The
+        # sim2sim twin (MuJoCo) sits inside this family, so the policy
+        # cannot overfit one exact servo law.
+        rand = self._pd_randomize
+        if (rand is not None and control_mode != engine.ControlMode.none
+                and env_id != -1):
+            kp_lo, kp_hi, kd_lo, kd_hi, ef_lo, ef_hi = rand
+            gen = np.random.RandomState(
+                1234567 + 7919 * env_id + 31 * obj_id)
+            kp_s = gen.uniform(kp_lo, kp_hi)
+            kd_s = gen.uniform(kd_lo, kd_hi)
+            ef_s = gen.uniform(ef_lo, ef_hi)
+            kp = (kp * kp_s).astype(kp.dtype)
+            kd = (kd * kd_s).astype(kd.dtype)
+            dof_props["stiffness"] = kp
+            dof_props["damping"] = kd
+            if ("effort" in dof_props.dtype.names):
+                dof_props["effort"] = (dof_props["effort"] * ef_s)
+            Logger.print("[isaac_gym] env {} PD rand kp x{:.3f} kd x{:.3f} "
+                         "eff x{:.3f}".format(env_id, kp_s, kd_s, ef_s))
         
         actuator_props = self._gym.get_actor_actuator_properties(env_ptr, obj_id)
         motor_efforts = [prop.motor_effort for prop in actuator_props]

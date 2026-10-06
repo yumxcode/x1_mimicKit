@@ -361,18 +361,27 @@ class X1Sim:
 
     def apply_action(self, a):
         a = np.clip(a, self.spec["a_low"], self.spec["a_high"])
-        # position servos: ctrl = joint position target; effort clip via
-        # actuator_forcerange keeps the torque within URDF limits
-        forcerange_ok = True
-        try:
-            fr = self.m.actuator_forcerange
-            forcerange_ok = fr.shape[0] == len(a)
-        except Exception:
-            forcerange_ok = False
-        if (forcerange_ok):
-            self.m.actuator_forcerange[:, 0] = -self.spec["effort"]
-            self.m.actuator_forcerange[:, 1] = self.spec["effort"]
-            self.m.actuator_forcelimited[:] = 1
+        import os
+        if not os.environ.get("X1_NO_EFFORT_CLIP"):
+            # position servos: ctrl = joint position target; effort clip
+            # via actuator_forcerange keeps the torque within URDF limits
+            forcerange_ok = True
+            try:
+                fr = self.m.actuator_forcerange
+                forcerange_ok = fr.shape[0] == len(a)
+            except Exception:
+                forcerange_ok = False
+            if (forcerange_ok):
+                self.m.actuator_forcerange[:, 0] = -self.spec["effort"]
+                self.m.actuator_forcerange[:, 1] = self.spec["effort"]
+                self.m.actuator_forcelimited[:] = 1
+        else:
+            self.m.actuator_forcelimited[:] = 0
+        if os.environ.get("X1_NO_DAMPING"):
+            for jid in range(self.m.njnt):
+                dofadr = self.m.jnt_dofadr[jid]
+                if dofadr >= 0:
+                    self.m.dof_damping[dofadr] = 0.0
         self.d.ctrl[:] = a
 
     def step_sim(self):
