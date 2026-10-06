@@ -189,6 +189,9 @@ class IsaacGymEngine(engine.Engine):
         dof_props = self._gym.get_actor_dof_properties(env_ptr, obj_id)
         kp = dof_props["stiffness"]
         kd = dof_props["damping"]
+        actuator_props = self._gym.get_actor_actuator_properties(env_ptr, obj_id)
+        motor_efforts = [prop.motor_effort for prop in actuator_props]
+        torque_lim = np.array(motor_efforts)
 
         # Per-env PD domain randomization (sim2sim robustness): scale
         # stiffness/damping/effort per env within configured bounds. The
@@ -213,10 +216,6 @@ class IsaacGymEngine(engine.Engine):
                 dof_props["effort"] = (torque_lim * ef_s).astype(np.float32)
             Logger.print("[isaac_gym] env {} PD rand kp x{:.3f} kd x{:.3f} "
                          "eff x{:.3f}".format(env_id, kp_s, kd_s, ef_s))
-        
-        actuator_props = self._gym.get_actor_actuator_properties(env_ptr, obj_id)
-        motor_efforts = [prop.motor_effort for prop in actuator_props]
-        torque_lim = np.array(motor_efforts)
         
         if (control_mode == engine.ControlMode.none):
             kp = np.zeros_like(kp)
