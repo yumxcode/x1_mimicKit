@@ -265,8 +265,12 @@ class IsaacLabEngine(engine.Engine):
     
     def set_cmd(self, obj_id, cmd):
         obj = self._objs[obj_id]
-        dof_order_common2sim = self._dof_order_common2sim[obj_id]
-        sim_cmd = cmd[:, dof_order_common2sim]
+        # common->sim mapping is the SIM2COMMON index array (its [i] entry
+        # is the sim dof index of common joint i). Using the inverse
+        # (common2sim) here permuted commands onto WRONG joints - proven by
+        # the airborne actuator audit (sim_names[common2sim[ci]] mismatch).
+        common2sim_idx = self._dof_order_sim2common[obj_id]
+        sim_cmd = cmd[:, common2sim_idx]
 
         if (self._control_mode == engine.ControlMode.none):
             pass
@@ -285,7 +289,7 @@ class IsaacLabEngine(engine.Engine):
             qd = self.get_dof_vel(obj_id)
             tau = self._pd_kp_common * (cmd - q) - self._pd_kd_common * qd
             tau = torch.clamp(tau, -self._pd_eff_common, self._pd_eff_common)
-            obj.set_joint_effort_target(tau[:, dof_order_common2sim])
+            obj.set_joint_effort_target(tau[:, common2sim_idx])
         else:
             assert(False), "Unsupported control mode: {}".format(self._control_mode)
         return
@@ -505,8 +509,8 @@ class IsaacLabEngine(engine.Engine):
         obj = self._objs[obj_id]
 
         if (not np.isscalar(dof_pos)):
-            dof_order_common2sim = self._dof_order_common2sim[obj_id]
-            dof_pos = dof_pos[..., dof_order_common2sim]
+            common2sim_idx = self._dof_order_sim2common[obj_id]
+            dof_pos = dof_pos[..., common2sim_idx]
 
         if (env_id is None):
             obj.data.joint_pos[:, :] = dof_pos
@@ -520,8 +524,8 @@ class IsaacLabEngine(engine.Engine):
         obj = self._objs[obj_id]
 
         if (not np.isscalar(dof_vel)):
-            dof_order_common2sim = self._dof_order_common2sim[obj_id]
-            dof_vel = dof_vel[..., dof_order_common2sim]
+            common2sim_idx = self._dof_order_sim2common[obj_id]
+            dof_vel = dof_vel[..., common2sim_idx]
 
         if (env_id is None):
             obj.data.joint_vel[:, :] = dof_vel
