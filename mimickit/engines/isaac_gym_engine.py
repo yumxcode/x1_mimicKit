@@ -236,9 +236,10 @@ class IsaacGymEngine(engine.Engine):
         # unlimited torque (verified: engine shoulder moves 0.48 rad in
         # 33ms where the torque-limited twin moves 0.09). This is THE
         # sim2sim actuator-semantics gap.
-        if (self.get_control_mode() == engine.ControlMode.pos):
-            dof_props["effortLimit"] = torque_lim.astype(np.float32)
-            Logger.print("[isaac_gym] pos drive effortLimit enforced "
+        if (self.get_control_mode() == engine.ControlMode.pos
+                and "effort" in dof_props.dtype.names):
+            dof_props["effort"] = torque_lim.astype(np.float32)
+            Logger.print("[isaac_gym] pos drive effort limit enforced "
                          "from motor efforts: min {:.1f} max {:.1f}"
                          .format(float(torque_lim.min()),
                                  float(torque_lim.max())))
