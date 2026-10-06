@@ -147,8 +147,8 @@ def main():
             cands = sorted(glob.glob(os.path.join(staged, "*.pt")), key=_iters)
         if (cands):
             resume_model = cands[-1]
-    cmd = [sys.executable, "mimickit/run.py", "--arg_file",
-           "args/smp_x1_args.txt"]
+    arg_file = os.environ.get("X1_ARG_FILE", "args/smp_x1_args.txt")
+    cmd = [sys.executable, "mimickit/run.py", "--arg_file", arg_file]
     if (resume_model and os.path.isfile(resume_model)):
         cmd += ["--model_file", resume_model]
         print(f"[policy] warm-start from {resume_model}", flush=True)
