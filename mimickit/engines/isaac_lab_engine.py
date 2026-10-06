@@ -276,11 +276,30 @@ class IsaacLabEngine(engine.Engine):
             pass
         elif (self._control_mode == engine.ControlMode.pos):
             obj.set_joint_position_target(sim_cmd)
-            # cache for the per-substep re-push in _pre_sim_step (the
-            # internal buffer pathway drops commands in this build)
+            # cache for the per-substep torque law in _pre_sim_step (the
+            # position-target pathway is dead in this IsaacLab build)
             if (not hasattr(self, "_cached_pos_targets")):
                 self._cached_pos_targets = {}
-            self._cached_pos_targets[obj_id] = sim_cmd.detach().clone()
+                self._pd_gains = {}
+            self._cached_pos_targets[obj_id] = cmd.detach().clone()
+            g = self._parse_mjcf_gains(self._last_asset_file) \
+                if getattr(self, "_last_asset_file", None) else None
+            if (g is not None and obj_id not in self._pd_gains):
+                _, kps, kds, effs = g
+                dev = self._device
+                self._pd_gains[obj_id] = (
+                    torch.tensor(kps, device=dev, dtype=torch.float32),
+                    torch.tensor(kds, device=dev, dtype=torch.float32),
+                    torch.tensor(effs, device=dev, dtype=torch.float32))
+                # PhysX implicit joint damping (mirrors MuJoCo dof_damping)
+                try:
+                    import warp as wp
+                    kd_sim = self._pd_gains[obj_id][1].unsqueeze(0)[
+                        :, self._dof_order_sim2common[obj_id]]
+                    obj.write_joint_damping_to_sim(kd_sim)
+                except Exception as e:
+                    Logger.print("[isaac_lab_engine] damping write failed: "
+                                 "{}".format(e))
         elif (self._control_mode == engine.ControlMode.vel):
             obj.set_joint_velocity_target(sim_cmd)
         elif (self._control_mode == engine.ControlMode.torque):
@@ -968,23 +987,28 @@ class IsaacLabEngine(engine.Engine):
             obj = self._objs[obj_id]
             obj.write_data_to_sim()
 
-            # write_data_to_sim pushes the INTERNAL target buffer to PhysX
-            # every substep; the legacy set_joint_position_target does not
-            # populate it in this IsaacLab build, so our commands were
-            # silently clobbered. Re-push our cached targets AFTER the
-            # clobber so they win.
+            # Position-target plumbing is dead in this IsaacLab build
+            # (internal buffer pathway drops legacy-set targets). Fall
+            # back to a PURE TORQUE law mirroring the MuJoCo player:
+            #   damping via PhysX joint damping (implicit, written once)
+            #   spring tau = clip(kp*(a - q), +-effort) pushed per substep
             cached = getattr(self, "_cached_pos_targets", None)
-            if (cached is not None and obj_id in cached):
-                import warp as wp
-                tgt = cached[obj_id]
-                if (not hasattr(tgt, "_wp_cached")):
-                    tgt._wp_cached = None
+            gains = getattr(self, "_pd_gains", None)
+            if (cached is not None and gains is not None
+                    and obj_id in cached):
                 try:
+                    import warp as wp
+                    kp, kd, eff = gains[obj_id]
+                    tgt = cached[obj_id]
+                    q = self.get_dof_pos(obj_id)
+                    tau = torch.clamp(kp * (tgt - q), -eff, eff)
+                    tau_sim = tau[:, self._dof_order_sim2common[obj_id]]
                     rv = obj.root_view
-                    tgt_wp = wp.from_torch(tgt.contiguous(), dtype=wp.float32)
-                    rv.set_dof_position_targets(tgt_wp, obj._ALL_INDICES)
+                    tau_wp = wp.from_torch(tau_sim.contiguous(),
+                                           dtype=wp.float32)
+                    rv.set_dof_actuation_forces(tau_wp, obj._ALL_INDICES)
                 except Exception as e:
-                    Logger.print("[isaac_lab_engine] target re-push failed: "
+                    Logger.print("[isaac_lab_engine] torque push failed: "
                                  "{}".format(e))
         return
 
@@ -1160,6 +1184,7 @@ class IsaacLabEngine(engine.Engine):
 
         actuator_cfg = self._build_actuator_cfg(control_mode,
                                                 asset_file=obj_cfg.asset_file)
+        self._last_asset_file = obj_cfg.asset_file
 
         prim_path = OBJ_PATH_TEMPLATE.format(env_id, obj_id)
         init_state = ArticulationCfg.InitialStateCfg(pos=obj_cfg.start_pos, rot=obj_cfg.start_rot)
@@ -1204,6 +1229,7 @@ class IsaacLabEngine(engine.Engine):
 
         actuator_cfg = self._build_actuator_cfg(control_mode,
                                                 asset_file=obj_cfg.asset_file)
+        self._last_asset_file = obj_cfg.asset_file
 
         regex = OBJ_PATH_TEMPLATE.format(".*", obj_id)
         multi_obj_cfg = ArticulationCfg(prim_path=regex, spawn=None, actuators={"actuators": actuator_cfg})
