@@ -397,7 +397,13 @@ class BaseAgent(torch.nn.Module):
             val_name = k.title()
             if torch.is_tensor(v):
                 v = v.item()
-            self._logger.log(val_name, v, collection="2_Env", quiet=True)
+            # I64 fix-2: fail buckets go to CONSOLE (quiet=False) - the
+            # original quiet=True sent ALL env diagnostics (incl. these and
+            # the 7 pre-existing err stats) to log.txt only, invisible via
+            # gm task logs (console capture). Fourth channel lesson:
+            # instrumentations must verify the TARGET sink's visibility.
+            quiet_diag = not str(k).startswith("fail")
+            self._logger.log(val_name, v, collection="2_Env", quiet=quiet_diag)
         
         obs_norm_mean = self._obs_norm.get_mean()
         obs_norm_std = self._obs_norm.get_std()
