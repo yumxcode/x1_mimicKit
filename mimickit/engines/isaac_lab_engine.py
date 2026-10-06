@@ -275,7 +275,13 @@ class IsaacLabEngine(engine.Engine):
         if (self._control_mode == engine.ControlMode.none):
             pass
         elif (self._control_mode == engine.ControlMode.pos):
-            obj.set_joint_position_target(sim_cmd)
+            try:
+                # index-style setter fills the buffer the runtime's own
+                # submit path reorders (user->backend) and pushes
+                obj.set_joint_position_target_index(target=sim_cmd,
+                                                    full_data=True)
+            except Exception:
+                obj.set_joint_position_target(sim_cmd)
             # cache for the per-substep torque law in _pre_sim_step (the
             # position-target pathway is dead in this IsaacLab build)
             if (not hasattr(self, "_cached_pos_targets")):
@@ -992,24 +998,7 @@ class IsaacLabEngine(engine.Engine):
             # back to a PURE TORQUE law mirroring the MuJoCo player:
             #   damping via PhysX joint damping (implicit, written once)
             #   spring tau = clip(kp*(a - q), +-effort) pushed per substep
-            cached = getattr(self, "_cached_pos_targets", None)
-            gains = getattr(self, "_pd_gains", None)
-            if (cached is not None and gains is not None
-                    and obj_id in cached):
-                try:
-                    kp, kd, eff = gains[obj_id]
-                    tgt = cached[obj_id]
-                    q = self.get_dof_pos(obj_id)
-                    tau = torch.clamp(kp * (tgt - q), -eff, eff)
-                    tau_sim = tau[:, self._dof_order_sim2common[obj_id]]
-                    # write_joint_effort_to_sim shares the (proven-working)
-                    # state-write convention; root_view expects a different
-                    # backend dof order (that mis-permutation saturated
-                    # wrong joints in the audit)
-                    obj.write_joint_effort_to_sim(tau_sim)
-                except Exception as e:
-                    Logger.print("[isaac_lab_engine] torque push failed: "
-                                 "{}".format(e))
+            pass  # commands flow via the index-setter + native submit
         return
 
     def _sim_step(self):
