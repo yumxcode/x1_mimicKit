@@ -83,7 +83,7 @@ def main():
 
     env = env_builder.build_env(
         "data/envs/smp_x1_env.yaml",
-        "data/engines/isaac_lab_engine.yaml",
+        engine_cfg,
         num_envs=1, device="cuda:0", visualize=False, record_video=False)
 
     # build agent the standard way from configs (mirrors run.py)
