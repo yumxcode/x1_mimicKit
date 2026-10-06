@@ -48,12 +48,15 @@ def main():
     os.chdir(repo)
     print(f"[policy] repo root: {repo}", flush=True)
 
-    try:
-        import diffusers  # noqa: F401
-    except ImportError:
-        r = subprocess.run([sys.executable, "-m", "pip", "install", "-q",
-                            "diffusers>=0.36.0"])
-        assert r.returncode == 0, "pip install diffusers failed"
+    for mod, spec in (("diffusers", "diffusers>=0.36.0"),
+                      ("gymnasium", "gymnasium")):
+        try:
+            __import__(mod)
+        except ImportError:
+            subprocess.run([sys.executable, "-m", "pip", "install", "-q",
+                            "-i",
+                            "https://pypi.tuna.tsinghua.edu.cn/simple",
+                            spec])
 
     prior_model = os.path.join(repo, "data/models/smp_priors/x1_prior.pt")
     prior_cfg = os.path.join(
@@ -63,13 +66,7 @@ def main():
         print(f"[policy] FAIL prior artifacts missing: {missing}", flush=True)
         sys.exit(1)
 
-    # ensure the IsaacLab USD asset exists (MJCF -> USD conversion)
-    usd = os.path.join(repo, "data/assets/x1/x1.usd")
-    if not os.path.exists(usd):
-        r = subprocess.run([sys.executable, "scripts_remote/convert_x1_usd.py"])
-        if r.returncode != 0 or not os.path.exists(usd):
-            print("[policy] FAIL mjcf->usd conversion failed", flush=True)
-            sys.exit(1)
+    # isaac_gym engine consumes the MJCF directly; no USD conversion
 
     out_dir = "output/x1_smp_policy"
     run_ts = time.strftime("%Y-%m-%d_%H-%M-%S") + "x1_smp_policy"

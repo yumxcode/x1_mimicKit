@@ -3,7 +3,7 @@
 --visualize false
 --test_episodes 1
 
---engine_config data/engines/isaac_lab_engine.yaml
+--engine_config data/engines/isaac_gym_engine.yaml
 --env_config data/envs/smp_x1_env.yaml
 --agent_config data/agents/smp_x1_agent.yaml
 
