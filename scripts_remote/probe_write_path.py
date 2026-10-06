@@ -257,6 +257,42 @@ def main():
         print("WRITE F failed: %s: %s" % (type(e).__name__, e), flush=True)
     print("WRITE_RESULT E/F done", flush=True)
 
+    # --- test G: dump runtime source of the command pathway
+    try:
+        import inspect as _insp
+        cls_file = _insp.getsourcefile(type(obj))
+        print("WRITE G obj class file:", cls_file, flush=True)
+        src = open(cls_file).read()
+        lines = src.splitlines()
+        for pat in ("def set_joint_position_target",
+                    "def set_joint_effort_target",
+                    "def submit_commands",
+                    "def write_data_to_sim"):
+            for i, l in enumerate(lines):
+                if pat in l:
+                    lo = max(0, i - 2)
+                    hi = min(len(lines), i + 26)
+                    print("WRITE G ---- %s @%d ----" % (pat, i + 1), flush=True)
+                    for j in range(lo, hi):
+                        print("WRITE G | " + lines[j][:150], flush=True)
+                    break
+        # also the actuators collection class
+        coll_cls_file = _insp.getsourcefile(type(obj.actuators))
+        print("WRITE G coll class file:", coll_cls_file, flush=True)
+        src2 = open(coll_cls_file).read()
+        lines2 = src2.splitlines()
+        for pat in ("def set_index", "def submit_commands",
+                    "_joint_pos_target"):
+            hits = [i for i, l in enumerate(lines2) if pat in l]
+            print("WRITE G coll %-24s hits=%s" % (pat, hits[:4]), flush=True)
+            if hits:
+                i = hits[0]
+                for j in range(max(0, i - 2), min(len(lines2), i + 20)):
+                    print("WRITE G | " + lines2[j][:150], flush=True)
+    except Exception as e:
+        print("WRITE G failed: %s: %s" % (type(e).__name__, e), flush=True)
+    print("WRITE_RESULT G done", flush=True)
+
 
 if __name__ == "__main__":
     main()
