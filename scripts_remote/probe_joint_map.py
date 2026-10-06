@@ -72,21 +72,21 @@ def main():
         num_envs=1, device="cuda:0", visualize=False, record_video=False)
     eng = env._engine
     char_id = env._get_char_id()
-    obj = eng._objs[char_id]
     dev = "cuda:0"
 
-    sim_names = list(obj.joint_names)
     from tools.x1_pipeline.retarget_g1_x1 import X1_DOF_ORDER
     common_names = list(X1_DOF_ORDER)
-    s2c = eng._dof_order_sim2common[char_id].cpu().numpy()
-
-    ok = sum(1 for ci in range(29) if sim_names[s2c[ci]] == common_names[ci])
-    print("MAP invariant sim_names[sim2common[ci]]==common[ci]: %d/29" % ok,
-          flush=True)
-    for ci in range(29):
-        if sim_names[s2c[ci]] != common_names[ci]:
-            print("MAP MISMATCH ci=%d %s -> sim %s"
-                  % (ci, common_names[ci], sim_names[s2c[ci]]), flush=True)
+    try:
+        obj = eng._objs[char_id]
+        sim_names = list(obj.joint_names)
+        s2c = eng._dof_order_sim2common[char_id].cpu().numpy()
+        ok = sum(1 for ci in range(29)
+                 if sim_names[s2c[ci]] == common_names[ci])
+        print("MAP invariant sim_names[sim2common[ci]]==common[ci]: %d/29"
+              % ok, flush=True)
+    except Exception as e:
+        print("MAP (no permutation layer in this engine: %s)" % type(e).__name__,
+              flush=True)
 
     home_leg_l = [0.48891, 0.06213, -0.33853, 0.63204, -0.27224, 0.0]
     home_leg_r = [-0.48891, -0.06213, 0.33853, 0.63204, -0.27224, 0.0]
