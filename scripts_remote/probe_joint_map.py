@@ -38,10 +38,7 @@ def main():
     sys.path.insert(0, os.path.join(repo, "mimickit"))
     sys.path.insert(0, repo)
 
-    import subprocess
-    usd = os.path.join(repo, "data/assets/x1/x1.usd")
-    if not os.path.exists(usd):
-        subprocess.run([sys.executable, "scripts_remote/convert_x1_usd.py"])
+    # NOTE: no USD conversion on the isaac-gym engine (MJCF native)
 
     import subprocess
     try:
