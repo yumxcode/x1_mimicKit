@@ -200,13 +200,13 @@ def main():
     # a platform-mounted model_20*.pt at repo root, then the latest staged
     # policy in data/models/smp_policies/ (git-tracked relay weights).
     resume_model = os.environ.get("X1_RESUME_MODEL", "")
+    # r27: warm-start DISABLED by default - staged old-line checkpoints are
+    # 228-dim (pre-phase_obs) and size-mismatch the 229-dim obs normalizer/
+    # actor on load (smoke2 crash). Fresh start is also the cleaner control
+    # for the phase_obs single-variable experiment. Set X1_RESUME_MODEL to
+    # explicitly warm-start from a matching-dimension checkpoint.
     if (not resume_model):
-        cands = sorted(glob.glob(os.path.join(repo, "model_20*.pt")))
-        if (not cands):
-            staged = os.path.join(repo, "data/models/smp_policies")
-            cands = sorted(glob.glob(os.path.join(staged, "*.pt")))
-        if (cands):
-            resume_model = cands[-1]
+        cands = []  # was: model_20*.pt then data/models/smp_policies/*.pt
     cmd = [sys.executable, "mimickit/run.py", "--arg_file",
            "args/smp_x1_args.txt"]
     if (resume_model and os.path.isfile(resume_model)):
