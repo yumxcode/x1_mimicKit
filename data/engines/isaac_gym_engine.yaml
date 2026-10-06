@@ -9,4 +9,7 @@ ground_contact_height: 0.3179
 
 # PD domain randomization per env (scales):
 # kp_lo, kp_hi, kd_lo, kd_hi, ef_lo, ef_hi
-pd_randomize: [0.4, 1.5, 0.4, 1.5, 0.5, 1.5]
+# effort FIXED at nominal: U(0.5,1.5) weak end (5-90Nm) collapsed the
+# reward 0.17->0.12 over 3k iters (probe3b with fixed effort climbed to
+# 0.18); kp/kd rand kept — the MuJoCo nominal twin sits inside that band
+pd_randomize: [0.4, 1.5, 0.4, 1.5, 1.0, 1.0]
