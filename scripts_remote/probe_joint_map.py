@@ -48,7 +48,19 @@ def main():
         import gymnasium  # noqa: F401
     except ImportError:
         subprocess.run([sys.executable, "-m", "pip", "install", "-q",
+                        "-i", "https://pypi.tuna.tsinghua.edu.cn/simple",
                         "gymnasium"])
+
+    # pick the engine available on this image
+    engine_cfg = os.environ.get("X1_PROBE_ENGINE", "")
+    if (not engine_cfg):
+        try:
+            import isaacgym  # noqa: F401
+            engine_cfg = "data/engines/isaac_gym_engine.yaml"
+        except ImportError:
+            engine_cfg = "data/engines/isaac_lab_engine.yaml"
+        os.environ["X1_PROBE_ENGINE"] = engine_cfg
+    print("PROBE engine:", os.environ["X1_PROBE_ENGINE"], flush=True)
 
     import numpy as np
     import torch
@@ -56,7 +68,7 @@ def main():
 
     env = env_builder.build_env(
         "data/envs/smp_x1_probe_env.yaml",
-        os.environ.get("X1_PROBE_ENGINE", "data/engines/isaac_lab_engine.yaml"),
+        os.environ["X1_PROBE_ENGINE"],
         num_envs=1, device="cuda:0", visualize=False, record_video=False)
     eng = env._engine
     char_id = env._get_char_id()
