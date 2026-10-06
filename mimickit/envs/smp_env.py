@@ -1,6 +1,7 @@
 import torch
 
 import envs.amp_env as amp_env
+import envs.base_env as base_env
 import envs.deepmimic_env as deepmimic_env
 import learning.experience_buffer as experience_buffer
 import util.torch_util as torch_util
@@ -15,6 +16,24 @@ class SMPEnv(amp_env.AMPEnv):
                          record_video=record_video)
 
         self._gsi_buffer = None
+        return
+
+    def _update_done(self):
+        # I64 fix-3: AMPEnv._update_done (not DeepMimicEnv's) is what MRO
+        # resolves for SMPEnv - the original bucketing patch placed in
+        # DeepMimicEnv._update_done NEVER RAN (same MRO-bypass pattern as
+        # the P0 _update_reward empty stub). Keep AMP termination semantics
+        # (motion_len_term=False for looping data) and bucket here.
+        amp_env.AMPEnv._update_done(self)
+
+        fail_mask = (self._done_buf == base_env.DoneFlags.FAIL.value)
+        if (bool(fail_mask.any())):
+            root_pos_z = self._engine.get_root_pos(self._get_char_id())[..., 2]
+            low_root = root_pos_z < 0.3
+            self._diagnostics["fail_count"] = \
+                self._diagnostics.get("fail_count", 0) + int(fail_mask.sum().item())
+            self._diagnostics["fail_low_root"] = \
+                self._diagnostics.get("fail_low_root", 0) + int((fail_mask & low_root).sum().item())
         return
 
     def _update_reward(self):
