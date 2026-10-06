@@ -49,7 +49,10 @@ def main():
     print(f"[policy] repo root: {repo}", flush=True)
 
     for mod, spec in (("diffusers", "diffusers>=0.36.0"),
-                      ("gymnasium", "gymnasium")):
+                      ("gymnasium", "gymnasium"),
+                      ("tensorboardX", "tensorboardX"),
+                      ("wandb", "wandb"),
+                      ("moviepy", "moviepy")):
         try:
             __import__(mod)
         except ImportError:
