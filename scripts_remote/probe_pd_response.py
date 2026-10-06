@@ -82,12 +82,18 @@ def main():
     eng.set_root_ang_vel(None, char_id, 0.0)
 
     action = home + 0.4  # uniform +0.4 rad on all 29 joints
-    env._engine.set_cmd(char_id, torch.tensor(action, dtype=torch.float32, device=dev).unsqueeze(0))
+
+    # step 0: applies the reset writes (state propagate); discard
+    env.step(torch.tensor(home, dtype=torch.float32, device=dev).unsqueeze(0))
+    rp = eng.get_root_pos(char_id)[0].cpu().numpy()
+    print("AIR after reset-step root_pos:", rp.tolist(), flush=True)
 
     q0 = eng.get_dof_pos(char_id)[0].cpu().numpy()
-    # step exactly one control step (env.step applies cmd + 4 sim steps)
+    print("AIR q0 head:", q0[:5].tolist(), flush=True)
+    # measured step: command the offset action
     env.step(torch.tensor(action, dtype=torch.float32, device=dev).unsqueeze(0))
     q1 = eng.get_dof_pos(char_id)[0].cpu().numpy()
+    print("AIR root after step:", eng.get_root_pos(char_id)[0].cpu().numpy().tolist(), flush=True)
     delta = q1 - q0
     print("AIR delta (17 lumbar/arm, then legs):", flush=True)
     for i in (0, 3, 6, 17, 18, 23, 24, 29 - 1):
