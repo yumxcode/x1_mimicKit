@@ -48,7 +48,7 @@ def main():
     import envs.env_builder as env_builder
 
     env = env_builder.build_env(
-        "data/envs/smp_x1_env.yaml",
+        "data/envs/smp_x1_probe_env.yaml",
         os.environ.get("X1_PROBE_ENGINE", "data/engines/isaac_lab_engine.yaml"),
         num_envs=1, device="cuda:0", visualize=False, record_video=False)
     eng = env._engine
