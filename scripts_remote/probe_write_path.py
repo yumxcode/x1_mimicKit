@@ -329,6 +329,21 @@ def main():
               flush=True)
         # apply targets MANUALLY via root_view and step
         if rv is not None and hasattr(rv, "set_dof_position_targets"):
+            # FIRST: write drive gains to PhysX explicitly (USD carried
+            # kp=0 from the converter; actuator cfg values never reach
+            # the PhysX joint drive in this build)
+            try:
+                gains = eng._parse_mjcf_gains("data/assets/x1/x1.xml")
+                names_g, kps_g, kds_g, effs_g = gains
+                kp_sim = torch.tensor(kps_g, device=dev, dtype=torch.float32)
+                kd_sim = torch.tensor(kds_g, device=dev, dtype=torch.float32)
+                perm = eng._dof_order_sim2common[char_id].long()
+                obj.write_joint_stiffness_to_sim(kp_sim[perm])
+                obj.write_joint_damping_to_sim(kd_sim[perm])
+                print("WRITE H gains written to sim explicitly", flush=True)
+            except Exception as e:
+                print("WRITE H gain write failed: %s: %s"
+                      % (type(e).__name__, e), flush=True)
             perm = eng._dof_order_sim2common[char_id].long()
             tgt = action[:, perm].contiguous()
             try:
