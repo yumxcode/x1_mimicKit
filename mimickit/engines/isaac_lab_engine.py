@@ -279,11 +279,11 @@ class IsaacLabEngine(engine.Engine):
         elif (self._control_mode == engine.ControlMode.pd_explicit):
             # manual explicit PD: torque = kp*(a - q) - kd*qd, clipped to
             # effort limits - EXACTLY the MuJoCo sim2sim player law.
-            # Position targets are silently dropped for explicit actuators
-            # in this IsaacLab version, so we must command efforts.
+            # NOTE: cmd and q/qd are all in COMMON (MimicKit) order here;
+            # only the final torque is permuted to sim order.
             q = self.get_dof_pos(obj_id)
             qd = self.get_dof_vel(obj_id)
-            tau = self._pd_kp_common * (sim_cmd - q) - self._pd_kd_common * qd
+            tau = self._pd_kp_common * (cmd - q) - self._pd_kd_common * qd
             tau = torch.clamp(tau, -self._pd_eff_common, self._pd_eff_common)
             obj.set_joint_effort_target(tau[:, dof_order_common2sim])
         else:
