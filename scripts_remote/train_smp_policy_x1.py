@@ -148,6 +148,16 @@ def main():
         if (cands):
             resume_model = cands[-1]
     arg_file = os.environ.get("X1_ARG_FILE", "args/smp_x1_args.txt")
+    # marker file (committed for probe tasks; env vars don't reach the
+    # container through gm-run)
+    marker = os.path.join(repo, "data", ".x1_arg_file")
+    if os.path.isfile(marker):
+        rel = open(marker).read().strip()
+        arg_file = rel
+        print(f"[policy] arg file override via marker: {arg_file}",
+              flush=True)
+    if "--pdexp" in sys.argv:
+        arg_file = "args/smp_x1_pdexp_probe_args.txt"
     cmd = [sys.executable, "mimickit/run.py", "--arg_file", arg_file]
     if (resume_model and os.path.isfile(resume_model)):
         cmd += ["--model_file", resume_model]
