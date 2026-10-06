@@ -500,10 +500,12 @@ class DeepMimicEnv(char_env.CharEnv):
         if (bool(fail_mask.any())):
             root_pos_z = self._engine.get_root_pos(self._get_char_id())[..., 2]
             low_root = root_pos_z < 0.3
-            n_fail = int(fail_mask.sum().item())
-            self._info["n_fail"] = n_fail
-            self._info["n_low_root_fail"] = int((fail_mask & low_root).sum().item())
-            self._info["n_pose_fail_only"] = int((fail_mask & ~low_root).sum().item())
+            # accumulate into _diagnostics (the logger path via
+            # record_diagnostics -> _log_train_info auto-tabulates every key)
+            self._diagnostics["fail_count"] = \
+                self._diagnostics.get("fail_count", 0) + int(fail_mask.sum().item())
+            self._diagnostics["fail_low_root"] = \
+                self._diagnostics.get("fail_low_root", 0) + int((fail_mask & low_root).sum().item())
         return
 
     def _update_info(self, env_ids=None):
