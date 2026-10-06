@@ -48,6 +48,19 @@ def main():
     os.chdir(repo)
     print(f"[policy] repo root: {repo}", flush=True)
 
+    # I73 (idear-0020): one-line deployment fingerprint - resolves build-version
+    # vs logger-chain disputes in seconds (git rev-parse + dirty state)
+    try:
+        r = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
+                           cwd=repo, capture_output=True, text=True, timeout=10)
+        dirty = subprocess.run(["git", "status", "--porcelain"],
+                               cwd=repo, capture_output=True, text=True, timeout=10)
+        n_dirty = len([l for l in dirty.stdout.splitlines() if l.strip()])
+        print(f"[policy] DEPLOYED COMMIT: {r.stdout.strip()} (dirty files: {n_dirty})",
+              flush=True)
+    except Exception as e:
+        print(f"[policy] commit echo failed: {e}", flush=True)
+
     try:
         import diffusers  # noqa: F401
     except ImportError:
