@@ -276,6 +276,11 @@ class IsaacLabEngine(engine.Engine):
             pass
         elif (self._control_mode == engine.ControlMode.pos):
             obj.set_joint_position_target(sim_cmd)
+            # cache for the per-substep re-push in _pre_sim_step (the
+            # internal buffer pathway drops commands in this build)
+            if (not hasattr(self, "_cached_pos_targets")):
+                self._cached_pos_targets = {}
+            self._cached_pos_targets[obj_id] = sim_cmd.detach().clone()
         elif (self._control_mode == engine.ControlMode.vel):
             obj.set_joint_velocity_target(sim_cmd)
         elif (self._control_mode == engine.ControlMode.torque):
@@ -962,6 +967,25 @@ class IsaacLabEngine(engine.Engine):
         for obj_id in range(num_objs):
             obj = self._objs[obj_id]
             obj.write_data_to_sim()
+
+            # write_data_to_sim pushes the INTERNAL target buffer to PhysX
+            # every substep; the legacy set_joint_position_target does not
+            # populate it in this IsaacLab build, so our commands were
+            # silently clobbered. Re-push our cached targets AFTER the
+            # clobber so they win.
+            cached = getattr(self, "_cached_pos_targets", None)
+            if (cached is not None and obj_id in cached):
+                import warp as wp
+                tgt = cached[obj_id]
+                if (not hasattr(tgt, "_wp_cached")):
+                    tgt._wp_cached = None
+                try:
+                    rv = obj.root_view
+                    tgt_wp = wp.from_torch(tgt.contiguous(), dtype=wp.float32)
+                    rv.set_dof_position_targets(tgt_wp, obj._ALL_INDICES)
+                except Exception as e:
+                    Logger.print("[isaac_lab_engine] target re-push failed: "
+                                 "{}".format(e))
         return
 
     def _sim_step(self):
