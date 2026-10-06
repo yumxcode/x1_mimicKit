@@ -366,7 +366,42 @@ def main():
                       % (type(e).__name__, e), flush=True)
     except Exception as e:
         print("WRITE H failed: %s: %s" % (type(e).__name__, e), flush=True)
-    print("WRITE_RESULT H done", flush=True)
+
+    # --- test I: single-joint TORQUE via root_view inside substep loop
+    try:
+        import warp as wp
+        rv = obj.root_view
+        perm = eng._dof_order_sim2common[char_id].long()
+        for ci in (17, 23, 6):
+            pos = torch.tensor(home_full, device=dev).unsqueeze(0)
+            obj.write_joint_state_to_sim_index(position=pos,
+                                               velocity=torch.zeros_like(pos))
+            obj.write_root_link_pose_to_sim_index(
+                root_pose=torch.tensor([[0.0, 0.0, 0.8, 1.0, 0.0, 0.0, 0.0]],
+                                       device=dev))
+            obj.write_root_link_velocity_to_sim_index(
+                root_velocity=torch.zeros(1, 6, device=dev))
+            # clear cached targets so the engine torque law stays idle
+            eng._cached_pos_targets = {}
+            tau_common = torch.zeros(1, 29, device=dev)
+            tau_common[0, ci] = 50.0
+            tau_sim = tau_common[:, perm].contiguous()
+            for _ in range(4):
+                rv.set_dof_actuation_forces(
+                    wp.from_torch(tau_sim, dtype=wp.float32),
+                    obj._ALL_INDICES)
+                eng._sim.step(render=False)
+            obj.data.update(1.0 / 120.0)
+            q = obj.data.joint_pos[0].detach().cpu().numpy()
+            delta = q - home_full
+            top = np.argsort(-np.abs(delta))[:3]
+            print("WRITE I tau50(%s)-> %s" % (
+                common_names[ci],
+                " | ".join("%s %+.4f" % (common_names[j], delta[j])
+                           for j in top)), flush=True)
+    except Exception as e:
+        print("WRITE I failed: %s: %s" % (type(e).__name__, e), flush=True)
+    print("WRITE_RESULT I done", flush=True)
 
 
 if __name__ == "__main__":
