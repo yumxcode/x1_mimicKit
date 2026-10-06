@@ -11,7 +11,7 @@ root_height_obs: True
 # only, scattered zeros elsewhere) and makes ep_len a meaningful metric
 pose_termination: True
 pose_termination_dist: 0.8 # m (g1 uses 1.0; tighter for jogging tracking)
-enable_phase_obs: False
+enable_phase_obs: True  # r27 (I61/I80): phase observability - targets the 82.8% posture-drift share (policy currently blind to reference phase; oscillatory drift evidence + framework-native support, prior unaffected (phase not in disc_obs nor assertion set))
 enable_tar_obs: False
 disc_dof_vel_obs: False
 num_disc_obs_steps: 10
