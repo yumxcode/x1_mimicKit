@@ -82,7 +82,7 @@ def main():
     eng.set_root_ang_vel(None, char_id, 0.0)
 
     action = home + 0.4  # uniform +0.4 rad on all 29 joints
-    env._engine.set_cmd(char_id, torch.tensor(action).unsqueeze(0))
+    env._engine.set_cmd(char_id, torch.tensor(action, dtype=torch.float32, device=dev).unsqueeze(0))
 
     q0 = eng.get_dof_pos(char_id)[0].cpu().numpy()
     # step exactly one control step (env.step applies cmd + 4 sim steps)
