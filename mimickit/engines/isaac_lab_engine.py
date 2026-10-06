@@ -216,6 +216,64 @@ class IsaacLabEngine(engine.Engine):
         self._build_body_order_tensors()
         self._build_sensor_order_tensors()
         self._build_sim_tensors()
+
+        self._calibrate_backend_order()
+        return
+
+    def _calibrate_backend_order(self):
+        """Self-calibrate the root_view dof ordering at startup.
+
+        The runtime pushes efforts via root_view.set_dof_actuation_forces
+        in a BACKEND dof order that differs from joint_names order. Probe
+        it empirically: apply a single-joint torque under each candidate
+        permutation and keep the one that moves that joint the most.
+        """
+        import warp as wp
+        self._backend_perm = {}
+        try:
+            objs = self.get_objs_per_env()
+            for obj_id in range(objs):
+                if (self.get_obj_type(obj_id) != engine.ObjType.articulated):
+                    continue
+                obj = self._objs[obj_id]
+                n = int(self.get_dof_pos(obj_id).shape[-1])
+                s2c = self._dof_order_sim2common[obj_id].long()
+                cands = {
+                    "identity": torch.arange(n, device=self._device),
+                    "s2c": s2c,
+                    "c2s": torch.argsort(s2c),
+                }
+                ci = min(17, n - 1)  # a strong joint (left_hip_pitch)
+                best_name, best_score, best_perm = None, -1.0, None
+                q0 = self.get_dof_pos(obj_id)[0].clone()
+                for name, perm in cands.items():
+                    # restore state before each trial
+                    obj.write_joint_state_to_sim_index(
+                        position=q0.unsqueeze(0),
+                        velocity=torch.zeros_like(q0).unsqueeze(0))
+                    tau = torch.zeros(1, n, device=self._device)
+                    tau[0, ci] = 50.0
+                    tau_b = tau[:, perm].contiguous()
+                    tau_wp = wp.from_torch(tau_b, dtype=wp.float32)
+                    for _ in range(self._sim_steps):
+                        obj.write_data_to_sim()
+                        obj.root_view.set_dof_actuation_forces(
+                            tau_wp, obj._ALL_INDICES)
+                        self._sim.step(render=False)
+                    obj.data.update(1.0 / 120.0)
+                    q1 = self.get_dof_pos(obj_id)[0]
+                    score = float(torch.abs(q1[ci] - q0[ci]))
+                    Logger.print("[calib] perm {} moved joint {} by {:.4f}"
+                                 .format(name, ci, score))
+                    if (score > best_score):
+                        best_name, best_score, best_perm = (
+                            name, score, perm)
+                self._backend_perm[obj_id] = best_perm
+                Logger.print("[calib] backend perm for obj {}: {} "
+                             "(delta {:.4f})".format(obj_id, best_name,
+                                                     best_score))
+        except Exception as e:
+            Logger.print("[calib] failed: {}".format(e))
         return
     
     def step(self):
@@ -994,11 +1052,31 @@ class IsaacLabEngine(engine.Engine):
             obj.write_data_to_sim()
 
             # Position-target plumbing is dead in this IsaacLab build
-            # (internal buffer pathway drops legacy-set targets). Fall
-            # back to a PURE TORQUE law mirroring the MuJoCo player:
+            # (internal buffer pathway drops legacy-set targets). Apply a
+            # PURE TORQUE law mirroring the MuJoCo player, pushed AFTER
+            # write_data_to_sim so the (empty) internal effort buffer
+            # cannot clobber it:
             #   damping via PhysX joint damping (implicit, written once)
-            #   spring tau = clip(kp*(a - q), +-effort) pushed per substep
-            pass  # commands flow via the index-setter + native submit
+            #   spring tau = clip(kp*(a - q), +-effort) per substep
+            cached = getattr(self, "_cached_pos_targets", None)
+            gains = getattr(self, "_pd_gains", None)
+            bperm = getattr(self, "_backend_perm", None)
+            if (cached is not None and gains is not None
+                    and bperm is not None and obj_id in cached
+                    and obj_id in gains and obj_id in bperm):
+                try:
+                    import warp as wp
+                    kp, kd, eff = gains[obj_id]
+                    tgt = cached[obj_id]
+                    q = self.get_dof_pos(obj_id)
+                    tau = torch.clamp(kp * (tgt - q), -eff, eff)
+                    tau_b = tau[:, bperm[obj_id]].contiguous()
+                    tau_wp = wp.from_torch(tau_b, dtype=wp.float32)
+                    obj.root_view.set_dof_actuation_forces(
+                        tau_wp, obj._ALL_INDICES)
+                except Exception as e:
+                    Logger.print("[isaac_lab_engine] torque push failed: "
+                                 "{}".format(e))
         return
 
     def _sim_step(self):
