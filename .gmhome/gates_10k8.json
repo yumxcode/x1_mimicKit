@@ -1,0 +1,43 @@
+{
+  "model": "data/models/smp_policies/x1_policy_10k8.pt",
+  "motion": "data/motions/x1_v3/x1_run1_subject5_seg0.pkl",
+  "duration_s": 0.16666666666666666,
+  "fell": true,
+  "gates": {
+    "S1_no_fall": {
+      "pass_": false,
+      "duration_s": 0.16666666666666666,
+      "fell_at_s": 0.16666666666666666
+    },
+    "S2_rhythm": {
+      "pass_": false,
+      "cadence_hz": null,
+      "cad_ratio": null,
+      "symmetry": 0.16666666666666666,
+      "n_steps_l": 2,
+      "n_steps_r": 2
+    },
+    "S3_no_penetration": {
+      "pass_": false,
+      "min_sole_z_mm": -8.64191239228379
+    },
+    "S4_flat_stance": {
+      "pass_": false,
+      "tilt_med_deg": 23.079795862023186,
+      "tilt_p90_deg": 27.04835390707849
+    },
+    "S5_smooth": {
+      "pass_": false,
+      "vel_ratio": 2.953946828133112,
+      "hip_jerk_p99_deg": 59.57145153461674
+    },
+    "S6_locomotion": {
+      "pass_": false,
+      "mean_speed": 3.512719685511514,
+      "backward_frac": 1.0
+    }
+  },
+  "overall_pass": false,
+  "mean_abs_torque": 0.9763002082896708,
+  "mean_root_z": 0.5196273824627282
+}
