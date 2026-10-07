@@ -762,26 +762,35 @@ class IsaacLabEngine(engine.Engine):
     
     def _build_lights(self):
         import isaaclab.sim as sim_utils
+
+        # Light ORIENTATION is cosmetic; some containers ship neither
+        # isaacsim.core.utils.prims nor isaaclab.utils.prims (smoke3 render
+        # crash). Degrade to default orientation instead of failing env build.
+        distant_attach = LIGHT_PATH + "/distant_light"
         try:
-            import isaacsim.core.utils.prims as prim_utils
-        except ImportError:
-            import isaaclab.utils.prims as prim_utils  # IsaacLab >= 2.x
-        from pxr import Gf
+            try:
+                import isaacsim.core.utils.prims as prim_utils
+            except ImportError:
+                import isaaclab.utils.prims as prim_utils  # IsaacLab >= 2.x
+            from pxr import Gf
 
-        light_quat = torch_util.euler_xyz_to_quat(torch.tensor(0.7),
-                                                  torch.tensor(0.0), 
-                                                  torch.tensor(0.6))
-        light_quat = light_quat.tolist()
-        distant_light_path = LIGHT_PATH + "/distant_light_xform"
-        light_xform = prim_utils.create_prim(distant_light_path, "Xform")
+            light_quat = torch_util.euler_xyz_to_quat(torch.tensor(0.7),
+                                                      torch.tensor(0.0),
+                                                      torch.tensor(0.6))
+            light_quat = light_quat.tolist()
+            distant_light_path = LIGHT_PATH + "/distant_light_xform"
+            light_xform = prim_utils.create_prim(distant_light_path, "Xform")
 
-        gf_quatf = Gf.Quatd()
-        gf_quatf.SetReal(light_quat[-1])
-        gf_quatf.SetImaginary(tuple(light_quat[:-1]))
-        light_xform.GetAttribute("xformOp:orient").Set(gf_quatf)
+            gf_quatf = Gf.Quatd()
+            gf_quatf.SetReal(light_quat[-1])
+            gf_quatf.SetImaginary(tuple(light_quat[:-1]))
+            light_xform.GetAttribute("xformOp:orient").Set(gf_quatf)
+            distant_attach = distant_light_path + "/distant_light"
+        except (ImportError, AttributeError):
+            pass  # default orientation fallback
 
         distant_light_cfg = sim_utils.DistantLightCfg(intensity=2000.0, color=(0.8, 0.8, 0.8))
-        self._distant_light = distant_light_cfg.func(distant_light_path + "/distant_light", distant_light_cfg)
+        self._distant_light = distant_light_cfg.func(distant_attach, distant_light_cfg)
 
         dome_light_cfg = sim_utils.DomeLightCfg(intensity=800.0, color=(0.7, 0.7, 0.7))
         self._dome_light = dome_light_cfg.func(LIGHT_PATH + "/dome_light", dome_light_cfg)
