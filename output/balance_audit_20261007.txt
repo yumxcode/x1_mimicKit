@@ -17,3 +17,4 @@ key16 (TASK_20261007_041): FAIL:账户余额不足，请充值或者联系管理
 
 # sentinel re-probe round 1 (2026-10-07 ~16:00): 0/16 funded, pool unchanged (4 ids)
 # sentinel re-probe round 2 (2026-10-07 ~20:00): 0/16 funded, pool unchanged (ids 31-34)
+# sentinel re-probe round 3 FINAL (2026-10-07 ~24:00): 0/16 funded, pool unchanged (ids 31-34). Sentinel STOPPED after 3 consecutive empty rounds (~12h). Terminal state: see X1_SMP_SIM2SIM_FINAL_REPORT.md. Resume: recharge any account -> copy TASK_20261007_022 (warm x1_policy_10k8.pt in repo main).
