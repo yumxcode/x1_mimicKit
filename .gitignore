@@ -2,7 +2,16 @@
 
 .vs/
 __pycache__/
-output/
+output/*
+!output/X1_SMP_SIM2SIM_FINAL_REPORT.md
+!output/multistart.json
+!output/gates_10k8.json
+!output/balance_audit_20261007.txt
+!output/videos/
+output/videos/*
+!output/videos/ref_motion_x1_mesh.mp4
+!output/videos/isaac_f3k5_ep0_mesh.mp4
+!output/videos/sim2sim_10k8_mesh.mp4
 .vscode/
 wandb/
 .venv/
