@@ -29,6 +29,10 @@ class TinyMDMModel(KinematicBaseModel):
         self.dropout = config.get("dropout", 0.)
         self.estimate_mode = config["estimate_mode"]
         self.loss_type = config["loss_type"]
+        # Min-SNR-gamma (Hang et al. 2023): clamp per-timestep SNR weight so
+        # near-unlearnable high-noise steps stop dominating the gradient.
+        # None/absent -> legacy constant weighting (byte-identical loss).
+        self.min_snr_gamma = config.get("min_snr_gamma", None)
         self.schedule_mode = config["noise_schedule_mode"]
         self.arch_name = config["arch_name"]
         self.model_ema = config.get("model_ema", False)
@@ -167,7 +171,23 @@ class TinyMDMModel(KinematicBaseModel):
         else:
             raise NotImplementedError
             
-        if self.loss_type == "l1":
+        if (self.min_snr_gamma is not None):
+            # Min-SNR-gamma weighting (Hang et al. 2023, "Efficient Diffusion
+            # Training via Min-SNR"). w_t = clamp(SNR_t, max=gamma), then
+            # mean-normalized so the overall loss scale (and thus the tuned
+            # lr / grad-clip regime) is preserved.
+            _ap = self.diffusion_scheduler.alphas_cumprod[timesteps]
+            _snr = _ap / (1.0 - _ap)
+            _w = torch.clamp(_snr, max=self.min_snr_gamma)
+            _w = _w / _w.mean()
+            if self.loss_type == "l1":
+                _elem = (pred - target.squeeze()).abs()
+            elif self.loss_type == "l2":
+                _elem = (pred - target.squeeze()) ** 2
+            else:
+                raise NotImplementedError
+            loss = (_w.unsqueeze(-1) * _elem).mean()
+        elif self.loss_type == "l1":
             loss = torch.nn.functional.l1_loss(pred, target.squeeze())
         elif self.loss_type == "l2":
             loss = torch.nn.functional.mse_loss(pred, target.squeeze())
