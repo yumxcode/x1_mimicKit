@@ -7,9 +7,9 @@ env_spacing: 5
 
 ground_contact_height: 0.3179
 
-# PD domain randomization per env (scales):
-# kp_lo, kp_hi, kd_lo, kd_hi, ef_lo, ef_hi
-# effort FIXED at nominal: U(0.5,1.5) weak end (5-90Nm) collapsed the
-# reward 0.17->0.12 over 3k iters (probe3b with fixed effort climbed to
-# 0.18); kp/kd rand kept — the MuJoCo nominal twin sits inside that band
-pd_randomize: [0.4, 1.5, 0.4, 1.5, 1.0, 1.0]
+# FINAL round: effort limits ENFORCED (dof_props.effort = motor efforts),
+# NO PD randomization — this exactly matches the MuJoCo nominal twin
+# (kp/kd/effort nominal). Two randomized rounds showed per-env fixed
+# PD factors HURT learning (reward flat 0.07-0.13 vs 0.42 unlimited);
+# the residual sim2sim gap will be measured with a strong nominal policy.
+# pd_randomize: (removed)
