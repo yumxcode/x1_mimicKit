@@ -1,0 +1,37 @@
+model_name: "tiny_mdm"
+arch_name: "DiT"
+
+T: 50
+# v2 (phase-2 retrain, amendment 4 / E12 / prior audit):
+#  - v_prediction: makes high-t targets learnable (const-eps has unlearnable
+#    eps targets at high t; research subtask-d3e3ce00)
+#  - min_snr_gamma 5: rebalances loss across timesteps (Hang et al. 2023)
+#  - iterations 200k -> 300k: audit verdict SMOOTHED/undertrained
+#    (680 windows, NN ratio 2.03e5, self_loop gen 206.9 vs data 0.63)
+loss_type: 'l1'
+estimate_mode: 'v_prediction'
+min_snr_gamma: 5.0
+noise_schedule_mode: 'squaredcos_cap_v2'
+
+num_layers: 2
+num_attention_heads: 4 # inner_dim = heads * 64
+
+model_ema: True
+model_ema_decay: 0.995
+model_ema_steps: 10
+model_ema_update_after: 5_000
+
+normalizer_std_clip: 0.2
+
+batch_size: 512
+lr: 0.0002
+num_iterations: 300_000
+num_samples_stat: 20_000
+output_iter: 2_000
+grad_clip_norm: 1.0
+
+env_config: "data/envs/smp_x1_env.yaml"
+motion_file: "data/datasets/dataset_x1_run.yaml"
+control_freq: 30
+
+master_port: '11436'
