@@ -16,3 +16,4 @@ key15 (TASK_20261007_040): FAIL:账户余额不足，请充值或者联系管理
 key16 (TASK_20261007_041): FAIL:账户余额不足，请充值或者联系管理员获取兑换码！
 
 # sentinel re-probe round 1 (2026-10-07 ~16:00): 0/16 funded, pool unchanged (4 ids)
+# sentinel re-probe round 2 (2026-10-07 ~20:00): 0/16 funded, pool unchanged (ids 31-34)
