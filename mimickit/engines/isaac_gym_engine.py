@@ -84,6 +84,13 @@ class IsaacGymEngine(engine.Engine):
         # optional PD domain randomization (list of 6 scales:
         # kp_lo, kp_hi, kd_lo, kd_hi, ef_lo, ef_hi)
         self._pd_randomize = None
+        self._contact_randomize = None
+        crand = config.get("contact_randomize", None)
+        if (crand is not None):
+            assert (len(crand) == 4), "contact_randomize needs 4 entries"
+            self._contact_randomize = [float(v) for v in crand]
+            Logger.print("[isaac_gym] contact domain randomization ON: {}"
+                         .format(self._contact_randomize))
         pd_rand = config.get("pd_randomize", None)
         if (pd_rand is not None):
             assert (len(pd_rand) == 6), "pd_randomize needs 6 entries"
@@ -247,6 +254,34 @@ class IsaacGymEngine(engine.Engine):
                                  float(torque_lim.max())))
 
         self._gym.set_actor_dof_properties(env_ptr, obj_id, dof_props)
+
+        # Optional per-env CONTACT domain randomization (fallback path if
+        # the MuJoCo twin still falls after nominal training converges):
+        # scale rigid-shape friction (and restitution jitter) per env so
+        # the policy cannot overfit one contact model. Config:
+        #   contact_randomize: [fr_lo, fr_hi, rest_lo, rest_hi]
+        crand = self._contact_randomize
+        if (crand is not None and env_id != -1
+                and not is_visual):
+            try:
+                fr_lo, fr_hi, re_lo, re_hi = crand
+                gen = np.random.RandomState(
+                    24681357 + 104729 * env_id + 7 * obj_id)
+                fr_s = gen.uniform(fr_lo, fr_hi)
+                re_v = gen.uniform(re_lo, re_hi)
+                shape_props = self._gym.get_actor_rigid_shape_properties(
+                    env_ptr, obj_id)
+                shape_props["friction"] = (
+                    shape_props["friction"] * fr_s)
+                shape_props["restitution"] = re_v
+                self._gym.set_actor_rigid_shape_properties(
+                    env_ptr, obj_id, shape_props)
+                if (env_id % 1024 == 0):
+                    Logger.print("[isaac_gym] env {} contact rand fr x{:.3f}"
+                                 " rest {:.3f}".format(env_id, fr_s, re_v))
+            except Exception as e:
+                Logger.print("[isaac_gym] contact randomize failed: {}"
+                             .format(e))
 
         if (color is not None):
             num_bodies = self.get_obj_num_bodies(obj_id)

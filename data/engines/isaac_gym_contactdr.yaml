@@ -1,0 +1,15 @@
+engine_name: "isaac_gym"
+
+control_mode: "pos"
+control_freq: 30
+sim_freq: 120
+env_spacing: 5
+
+ground_contact_height: 0.3179
+
+# FALLBACK stack (only if nominal 30k converges in-engine but MuJoCo
+# still falls): effort limits enforced (default, no pd_randomize) PLUS
+# contact domain randomization — per-env rigid-shape friction scale and
+# restitution jitter. MuJoCo twin ground friction is 1.0 with solref
+# 0.02; this family brackets it.
+contact_randomize: [0.7, 1.4, 0.0, 0.2]
