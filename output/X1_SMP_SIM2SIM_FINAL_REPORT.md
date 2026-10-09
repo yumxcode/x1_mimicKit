@@ -38,14 +38,19 @@ MuJoCo S1–S6 门数据存档：`.gmhome/gates_10k8.json`。
 
 ## 3. 训练矩阵与 multistart 史（同一验收口径）
 
-| 轮次 | 物理栈 | 引擎内 smp_reward | MuJoCo multistart |
+| 轮次 | 物理栈 | 引擎内 smp_reward | MuJoCo multistart（严判据） |
 |---|---|---|---|
 | f3k5 fresh | 无限力矩 | 0.42–0.49（站立拖步） | 0.15s / max 0.23 |
-| r700 PD-rand | 无限力矩+rand | ~0.15 | 0.15s / max 0.27 |
-| r2@1800 | 无限力矩+rand | 0.14 平台 | 0.14s / max 0.33 |
+| r700/r2 PD-rand | 无限力矩+rand | 0.14–0.15 | 0.14–0.15s / max 0.33 |
 | e3k1(10k5) | 限幅+rand | 0.12–0.13 | 0.15s / max 0.33 |
-| effr2@3200 | 限幅+rand(收紧) | 0.064–0.08 平台 | 0.11s |
-| **nominal@300(10k8)** | **限幅+无rand=孪生同构** | **0.20→0.24 稳定爬升** | 0.13s（未及收敛） |
+| nominal r3(14k3) | 限幅+无rand | Q4 0.276 尾 0.31 | 0.11s / max 0.17 |
+| nominal r6(21k3) | 限幅+无rand | **0.30–0.31 平台（慢跑成型）**，后期 0.22–0.25 | 0.10s / max 0.13 |
+| contactdr-r1(28k3) | 限幅+接触DR | 0.19 平台（随机化税） | 0.11s / max 0.20 |
+
+宽松判据对照（仅 root_z≥0.35，tools/sim2sim/sweep_twin_friction.py）：nominal 21k3 存活
+0.58–0.78s（max 1.93s）、contactdr 28k3 0.42–0.44s（摩擦平坦=DR 鲁棒性生效）——但严判据
+（S1 对齐：tilt>60°/非足触地）在 1–6 步内触发，终止主因是 **tilt>60° 倾倒**（root z 尚在
+0.4m、无低位体）。起始帧倾角 8.9–31.1°（正常跑步前倾），初态公平。
 
 关键判读：PD 随机化的弱端（kp×0.4）使任务不可学（奖励塌缩），**effort 限幅+无随机化
 （=MuJoCo 标称孪生同构）是唯一奖励持续爬升的配置**，但 300 iters 被平台抢占即账号耗尽。
@@ -76,7 +81,27 @@ MuJoCo S1–S6 门数据存档：`.gmhome/gates_10k8.json`。
 **16/16 返回"账户余额不足"**，funded=0。训练接力（copy TASK_20261007_022 → 30k iters）
 在充值前不可执行——这是唯一的硬外部阻塞。
 
-## 7. 阻塞与建议下一步
+## 7. 终局裁决（2026-10-10，contact-DR 轮完成后）
+
+在累计 ~28k iters、语义对齐验证齐备的前提下：
+- **引擎内**：nominal 栈已达成慢跑成型（smp_reward 0.30–0.31 平台）；
+- **MuJoCo 孪生**：全部 5 个权重（10k8/10k5/14k3/21k3/28k3）multistart 0.10–0.15s 全灭
+  （output/multistart.json 含逐起点原始数据）；终止主因 tilt>60° 倾倒，非初态伪影；
+- **两个标准域随机化杠杆均被证伪且带奖励税**：PD-rand（kp/kd/effort U(0.4-1.5)）奖励塌至
+  0.07–0.13；contact-rand（摩擦 0.7–1.4x+restitution）奖励 0.19 且 MuJoCo 存活无改善；
+- **开环重放**（同 init+同动作）：前 3 步 mean_dof≈0.04 rad 后 13–18 步倾倒，接触/摩擦/伺服
+  参数扫描均不改变结论——差距在 PhysX↔MuJoCo 接触动力学层，超出本算力预算可弥合范围。
+
+**结论：sim2sim 通过标准在本技术栈（isaac_gym 隐式 pos drive 训练→MuJoCo 隐式 PD 孪生）
+内未达成，且已系统性排障至引擎级差距。**
+
+后续可行路线（按建议优先级）：
+1. **显式力矩训练栈**（pd_explicit，引擎已支持且探针验证稳定）：动作=力矩，两引擎语义可
+   精确对齐，从当前权重 warm 起步需 ~10–20k iters 预算；
+2. IsaacLab 原生部署路径（部署侧仿真与训练同引擎，规避跨引擎鸿沟）；
+3. 接受引擎内成果（引擎 rollout 视频见 output/videos/isaac_f3k5_ep0_mesh.mp4）。
+
+## 8. 阻塞与建议下一步
 
 **阻塞**：见 §6（16/16 账号余额耗尽，审计存档 output/balance_audit_20261007.txt）。
 
