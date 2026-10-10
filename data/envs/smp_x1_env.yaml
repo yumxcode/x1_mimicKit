@@ -81,3 +81,7 @@ reward_vel_scale: 0.01
 reward_root_pose_scale: 5.0
 reward_root_vel_scale: 1.0
 reward_key_pos_scale: 10.0
+
+# rev11-20: task reward channel was DEAD (AMPEnv._update_reward no-op
+# override). Enable the DeepMimic tracking channel for hybrid training.
+enable_task_reward: true

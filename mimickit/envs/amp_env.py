@@ -10,6 +10,11 @@ class AMPEnv(deepmimic_env.DeepMimicEnv):
     def __init__(self, env_config, engine_config, num_envs, device, visualize, record_video=False):
         self._num_disc_obs_steps = env_config["num_disc_obs_steps"]
         self._disc_dof_vel_obs = env_config.get("disc_dof_vel_obs", True)
+        # AMP disables the DeepMimic task-tracking reward by overriding
+        # _update_reward with a no-op. For SMP-style HYBRID training
+        # (task_reward_weight > 0) the task channel must actually flow:
+        # enable_task_reward: true restores DeepMimicEnv._update_reward.
+        self._enable_task_reward = env_config.get("enable_task_reward", False)
         super().__init__(env_config=env_config, engine_config=engine_config, num_envs=num_envs, device=device,
                          visualize=visualize, record_video=record_video)
         return
@@ -278,6 +283,10 @@ class AMPEnv(deepmimic_env.DeepMimicEnv):
         return
 
     def _update_reward(self):
+        if (self._enable_task_reward):
+            # call DeepMimicEnv's real computation (pose/vel/root/key-pos
+            # tracking vs the per-step advancing reference state)
+            super()._update_reward()
         return
     
     def _reset_envs(self, env_ids):
