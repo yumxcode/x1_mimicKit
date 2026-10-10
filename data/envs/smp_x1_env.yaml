@@ -10,7 +10,7 @@ root_height_obs: True
 # (contact-force fall detection is blind here - sensor reports base_link
 # only, scattered zeros elsewhere) and makes ep_len a meaningful metric
 pose_termination: True
-pose_termination_dist: 2.0 # m (g1 uses 1.0; tighter for jogging tracking)
+pose_termination_dist: 1.0 # m (g1 uses 1.0; tighter for jogging tracking)
 enable_phase_obs: False
 enable_tar_obs: False
 disc_dof_vel_obs: False
