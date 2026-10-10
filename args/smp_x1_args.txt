@@ -4,7 +4,7 @@
 --max_samples 917504000
 --save_int_models true
 
---engine_config data/engines/isaac_gym_contactdr.yaml
+--engine_config data/engines/isaac_gym_engine.yaml
 --env_config data/envs/smp_x1_env.yaml
 --agent_config data/agents/smp_x1_agent.yaml
 
