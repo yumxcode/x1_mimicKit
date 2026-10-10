@@ -82,6 +82,11 @@ def main():
                 sys.exit(1)
 
     policy = os.environ.get("X1_DUMP_POLICY", "")
+    marker = os.path.join(repo, "data", ".x1_dump_policy")
+    if (os.path.isfile(marker)):
+        rel = open(marker).read().strip()
+        policy = rel
+        print(f"[dump] policy override via marker: {policy}", flush=True)
     if not policy:
         staged = os.path.join(repo, "data/models/smp_policies")
         import re
