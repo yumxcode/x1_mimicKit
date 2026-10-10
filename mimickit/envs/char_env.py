@@ -19,6 +19,7 @@ class CharEnv(sim_env.SimEnv):
         self._global_obs = env_config["global_obs"]
         self._root_height_obs = env_config.get("root_height_obs", True)
         self._zero_center_action = env_config.get("zero_center_action", False)
+        self._domain_rand_cfg = env_config.get("domain_rand", None)
         
         super().__init__(env_config=env_config, engine_config=engine_config,
                          num_envs=num_envs, device=device, visualize=visualize, 
@@ -309,6 +310,13 @@ class CharEnv(sim_env.SimEnv):
         
         self._engine.set_body_vel(env_ids, char_id, 0.0)
         self._engine.set_body_ang_vel(env_ids, char_id, 0.0)
+
+        if (self._domain_rand_cfg):
+            if (hasattr(self._engine, "set_dr_config") and not getattr(self, "_dr_configured", False)):
+                self._engine.set_dr_config(self._domain_rand_cfg)
+                self._dr_configured = True
+            if (hasattr(self._engine, "randomize_dynamics")):
+                self._engine.randomize_dynamics(env_ids, char_id)
         return
 
     def _reset_char_rigid_body_state(self, env_ids):
