@@ -101,7 +101,27 @@ MuJoCo S1–S6 门数据存档：`.gmhome/gates_10k8.json`。
 2. IsaacLab 原生部署路径（部署侧仿真与训练同引擎，规避跨引擎鸿沟）；
 3. 接受引擎内成果（引擎 rollout 视频见 output/videos/isaac_f3k5_ep0_mesh.mp4）。
 
-## 8. 阻塞与建议下一步
+## 8. 引擎侧跑步线（2026-10-10，用户 rev8-20 后）
+
+用户指出所有引擎视频均为"走两步站立"（rev8-10）且 task 奖励通道死亡（rev11-20），
+两轮根因修复后取得阶段性进展：
+
+1. **task 通道死亡根因**：`AMPEnv._update_reward` 空覆写使 DeepMimic 跟踪奖励从未计算
+   （`task_reward_weight>0` 配置形同虚设）——修复：`enable_task_reward: true` 开关恢复
+   `super()._update_reward()`，实证 Train_Return 0→57→84 非零爬升。
+2. **站立局部最优**：纯 SDS 奖励（原 task_w=0）+ 小探索（std 0.05）下 4 栈 5 权重全部
+   收敛"走两步站立"（净位移 0.04-0.9m/10s，膝摆 0.05-0.3Hz）。修复：task 0.5/smp 0.5
+   混合 + std 0.15 + warm f3k5 → **引擎内净位移 0.04→1.07m/10s（历史最大）**，但第 2 秒
+   起仍停住（5m 验收门 FAIL）。
+3. **episode 过短假设**：pose_termination_dist 0.8 砍 episode（dump ep1 仅 1 帧实证），
+   mixed-r2 放宽至 2.0 续链，在 4100/7000 iters 被抢占，恰逢全部账号（id31-40）余额
+   耗尽，NET 判定（需引擎 dump）未完成。
+
+**当前状态**：`x1_policy_mixL.pt`（r1b 终点）/`x1_policy_mixL2.pt`（r2@4100）已入库；
+引擎侧直线跑步尚未达成（1.07m vs 5m 门）；MuJoCo 侧 multistart 持平 0.11s（预期，
+nominal 栈）。
+
+## 9. 阻塞与建议下一步
 
 **阻塞**：见 §6（16/16 账号余额耗尽，审计存档 output/balance_audit_20261007.txt）。
 
