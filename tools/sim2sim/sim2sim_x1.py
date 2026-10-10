@@ -212,7 +212,12 @@ class X1Sim:
         self.m = mujoco.MjModel.from_xml_path(str(X1_SIM))
         self.d = mujoco.MjData(self.m)
         self.m.opt.timestep = SIM_DT
-        self._setup_implicit_pd(mujoco)
+        import os
+        self._twin_explicit = bool(os.environ.get("X1_TWIN_EXPLICIT"))
+        if (self._twin_explicit):
+            self._setup_explicit_pd(mujoco)
+        else:
+            self._setup_implicit_pd(mujoco)
         self.qadr = np.array([self.m.joint(n).qposadr[0]
                               for n in spec["names"]])
         self.vadr = np.array([self.m.joint(n).dofadr[0]
@@ -274,6 +279,31 @@ class X1Sim:
             self.m.actuator_biasprm[i, 1] = -kp
             self.m.actuator_biasprm[i, 2] = 0.0
             self.m.actuator_ctrllimited[i] = 0
+
+    def _setup_explicit_pd(self, mujoco):
+        """Twin matching the engine's pd_explicit control law EXACTLY:
+        per 120Hz substep, torque = clip(kp*(a-q) - kd*qdot, +/-effort)
+        applied as a direct joint force (damping stays 0 at joints; the
+        kd term is inside the computed torque)."""
+        m = self.m
+        self._pd_kp = np.asarray(self.spec["kp"], dtype=float)
+        self._pd_kd = np.asarray(self.spec["kd"], dtype=float)
+        self._pd_eff = np.asarray(self.spec["effort"], dtype=float)
+        for i, name in enumerate(self.spec["names"]):
+            jid = m.joint(name).id
+            dofadr = m.joint(name).dofadr[0]
+            m.dof_damping[dofadr] = 0.0
+            m.jnt_stiffness[jid] = 0.0
+            # pure torque motor: gain 1, no bias
+            m.actuator_gaintype[i] = mujoco.mjtGain.mjGAIN_FIXED
+            m.actuator_gainprm[i, 0] = 1.0
+            m.actuator_biastype[i] = mujoco.mjtBias.mjBIAS_NONE
+            m.actuator_biasprm[i, :] = 0.0
+            m.actuator_ctrllimited[i] = 0
+            m.actuator_forcerange[i, 0] = -self._pd_eff[i]
+            m.actuator_forcerange[i, 1] = self._pd_eff[i]
+            m.actuator_forcelimited[i] = 1
+        self._ctrl_cache = np.zeros(len(self.spec["names"]))
 
     def set_init(self, frame, next_frame=None, fps=30.0):
         """Init state from a motion frame. When next_frame is given, also
@@ -361,6 +391,9 @@ class X1Sim:
 
     def apply_action(self, a):
         a = np.clip(a, self.spec["a_low"], self.spec["a_high"])
+        if (getattr(self, "_twin_explicit", False)):
+            self._ctrl_cache[:] = a
+            return
         import os
         if not os.environ.get("X1_NO_EFFORT_CLIP"):
             # position servos: ctrl = joint position target; effort clip
@@ -386,6 +419,17 @@ class X1Sim:
 
     def step_sim(self):
         import mujoco
+        if (getattr(self, "_twin_explicit", False)):
+            for _ in range(SUBSTEPS):
+                q = self.d.qpos[self.qadr]
+                qd = self.d.qvel[self.vadr]
+                tau = np.clip(
+                    self._pd_kp * (self._ctrl_cache - q)
+                    - self._pd_kd * qd,
+                    -self._pd_eff, self._pd_eff)
+                self.d.ctrl[:] = tau
+                mujoco.mj_step(self.m, self.d)
+            return
         for _ in range(SUBSTEPS):
             mujoco.mj_step(self.m, self.d)
 

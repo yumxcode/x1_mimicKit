@@ -130,7 +130,12 @@ def main():
     # resume: warm-start from a checkpoint. Precedence: X1_RESUME_MODEL env,
     # a platform-mounted model_20*.pt at repo root, then the latest staged
     # policy in data/models/smp_policies/ (git-tracked relay weights).
-    resume_model = os.environ.get("X1_RESUME_MODEL", "")
+    fresh_marker = os.path.join(repo, "data", ".x1_fresh")
+    if (os.path.isfile(fresh_marker)):
+        resume_model = ""
+        print("[policy] FRESH start (marker data/.x1_fresh)", flush=True)
+    else:
+        resume_model = os.environ.get("X1_RESUME_MODEL", "")
     if (not resume_model):
         cands = sorted(glob.glob(os.path.join(repo, "model_20*.pt")))
         if (not cands):
