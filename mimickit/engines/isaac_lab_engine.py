@@ -282,6 +282,51 @@ class IsaacLabEngine(engine.Engine):
             assert(False), "Unsupported control mode: {}".format(self._control_mode)
         return
     
+    def set_dr_config(self, dr_cfg):
+        """I75/I81 domain randomization config (dict or None)."""
+        self._dr_cfg = dr_cfg if (isinstance(dr_cfg, dict) and dr_cfg) else None
+        return
+
+    def randomize_dynamics(self, env_ids, obj_id):
+        """r28 DR v1: per-env friction + mass randomization at reset.
+
+        I75/I81 recipe (Humanoid-Gym Table III core subset). Each term
+        guarded: version-dependent IsaacLab APIs must degrade visibly
+        (telemetry print) rather than silently (channel lesson #1).
+        """
+        cfg = getattr(self, "_dr_cfg", None)
+        if (cfg is None):
+            return
+        applied = []
+        obj = self._objs[obj_id]
+        try:
+            mass_rng = cfg.get("mass_range", None)
+            if (mass_rng is not None):
+                base_mass = obj.root_physx_view.get_masses().clone()
+                n_envs = base_mass.shape[0]
+                scale = torch.empty([n_envs, 1], device=base_mass.device)
+                scale.uniform_(1.0 + float(mass_rng[0]), 1.0 + float(mass_rng[1]))
+                obj.root_physx_view.set_masses(base_mass * scale, env_ids)
+                applied.append("mass[{},{}]".format(mass_rng[0], mass_rng[1]))
+        except Exception as e:
+            print(f"[DR] mass randomization FAILED: {e}", flush=True)
+        try:
+            fric_rng = cfg.get("friction_range", None)
+            if (fric_rng is not None):
+                props = obj.root_physx_view.get_material_properties().clone()
+                n_envs = props.shape[0]
+                new_fric = torch.empty([n_envs, 1, 1], device=props.device)
+                new_fric.uniform_(float(fric_rng[0]), float(fric_rng[1]))
+                props[..., 0] = new_fric
+                props[..., 1] = new_fric
+                obj.root_physx_view.set_material_properties(props, env_ids)
+                applied.append("fric[{},{}]".format(fric_rng[0], fric_rng[1]))
+        except Exception as e:
+            print(f"[DR] friction randomization FAILED: {e}", flush=True)
+        if (applied):
+            print(f"[DR] randomized envs n={len(env_ids)}: {', '.join(applied)}", flush=True)
+        return
+
     def set_camera_pose(self, pos, look_at):
         env_offset = self._env_offsets[0].cpu().numpy()
         cam_pos = pos.copy()
@@ -762,26 +807,35 @@ class IsaacLabEngine(engine.Engine):
     
     def _build_lights(self):
         import isaaclab.sim as sim_utils
+
+        # Light ORIENTATION is cosmetic; some containers ship neither
+        # isaacsim.core.utils.prims nor isaaclab.utils.prims (smoke3 render
+        # crash). Degrade to default orientation instead of failing env build.
+        distant_attach = LIGHT_PATH + "/distant_light"
         try:
-            import isaacsim.core.utils.prims as prim_utils
-        except ImportError:
-            import isaaclab.utils.prims as prim_utils  # IsaacLab >= 2.x
-        from pxr import Gf
+            try:
+                import isaacsim.core.utils.prims as prim_utils
+            except ImportError:
+                import isaaclab.utils.prims as prim_utils  # IsaacLab >= 2.x
+            from pxr import Gf
 
-        light_quat = torch_util.euler_xyz_to_quat(torch.tensor(0.7),
-                                                  torch.tensor(0.0), 
-                                                  torch.tensor(0.6))
-        light_quat = light_quat.tolist()
-        distant_light_path = LIGHT_PATH + "/distant_light_xform"
-        light_xform = prim_utils.create_prim(distant_light_path, "Xform")
+            light_quat = torch_util.euler_xyz_to_quat(torch.tensor(0.7),
+                                                      torch.tensor(0.0),
+                                                      torch.tensor(0.6))
+            light_quat = light_quat.tolist()
+            distant_light_path = LIGHT_PATH + "/distant_light_xform"
+            light_xform = prim_utils.create_prim(distant_light_path, "Xform")
 
-        gf_quatf = Gf.Quatd()
-        gf_quatf.SetReal(light_quat[-1])
-        gf_quatf.SetImaginary(tuple(light_quat[:-1]))
-        light_xform.GetAttribute("xformOp:orient").Set(gf_quatf)
+            gf_quatf = Gf.Quatd()
+            gf_quatf.SetReal(light_quat[-1])
+            gf_quatf.SetImaginary(tuple(light_quat[:-1]))
+            light_xform.GetAttribute("xformOp:orient").Set(gf_quatf)
+            distant_attach = distant_light_path + "/distant_light"
+        except (ImportError, AttributeError):
+            pass  # default orientation fallback
 
         distant_light_cfg = sim_utils.DistantLightCfg(intensity=2000.0, color=(0.8, 0.8, 0.8))
-        self._distant_light = distant_light_cfg.func(distant_light_path + "/distant_light", distant_light_cfg)
+        self._distant_light = distant_light_cfg.func(distant_attach, distant_light_cfg)
 
         dome_light_cfg = sim_utils.DomeLightCfg(intensity=800.0, color=(0.7, 0.7, 0.7))
         self._dome_light = dome_light_cfg.func(LIGHT_PATH + "/dome_light", dome_light_cfg)
