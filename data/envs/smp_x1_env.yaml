@@ -81,3 +81,12 @@ reward_vel_scale: 0.01
 reward_root_pose_scale: 5.0
 reward_root_vel_scale: 1.0
 reward_key_pos_scale: 10.0
+
+# r28 (I75/I81): domain randomization v1 - friction + mass per-env at reset.
+# Targets the persistent MuJoCo sim2sim gap (engine-level contact/dynamics
+# differences; E4 five-way 0.78-2.23 non-monotone but 100% MuJoCo falls).
+# NOTE: enable_phase_obs stays True (r27R-4 config otherwise unchanged) -
+# DR is the single NEW variable vs r27R-4.
+domain_rand:
+  friction_range: [0.1, 2.0]
+  mass_range: [-0.3, 0.3]
