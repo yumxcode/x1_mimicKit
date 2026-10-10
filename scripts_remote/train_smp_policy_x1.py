@@ -127,31 +127,41 @@ def main():
     if os.environ.get("POLICY_DEBUG", "0") == "1":
         env["CUDA_LAUNCH_BLOCKING"] = "1"
 
-    # resume: warm-start from a checkpoint. Precedence: X1_RESUME_MODEL env,
-    # a platform-mounted model_20*.pt at repo root, then the latest staged
-    # policy in data/models/smp_policies/ (git-tracked relay weights).
-    fresh_marker = os.path.join(repo, "data", ".x1_fresh")
+    # resume: warm-start from a checkpoint. Precedence: data/.x1_fresh
+    # marker (TRUE fresh - skips ALL selection), data/.x1_resume_model
+    # marker (explicit path), X1_RESUME_MODEL env, a platform-mounted
+    # model_20*.pt at repo root, then the latest staged policy in
+    # data/models/smp_policies/ (git-tracked relay weights).
+    repo_dir = repo
+    fresh_marker = os.path.join(repo_dir, "data", ".x1_fresh")
+    resume_marker = os.path.join(repo_dir, "data", ".x1_resume_model")
+    resume_model = ""
     if (os.path.isfile(fresh_marker)):
-        resume_model = ""
-        print("[policy] FRESH start (marker data/.x1_fresh)", flush=True)
+        print("[policy] FRESH start (marker data/.x1_fresh; no warm "
+              "start)", flush=True)
     else:
-        resume_model = os.environ.get("X1_RESUME_MODEL", "")
-    if (not resume_model):
-        cands = sorted(glob.glob(os.path.join(repo, "model_20*.pt")))
-        if (not cands):
-            staged = os.path.join(repo, "data/models/smp_policies")
-            # select by iteration count parsed from the file name
-            # (x1_policy_10k5.pt -> 10500); git-checkout mtimes are all
-            # equal so mtime sorting degenerates to lexicographic order
-            def _iters(path):
-                import re as _re
-                m = _re.search(r"(\d+)k(\d*)", os.path.basename(path))
-                if (not m):
-                    return -1
-                return int(m.group(1)) * 1000 + int(m.group(2) or 0)
-            cands = sorted(glob.glob(os.path.join(staged, "*.pt")), key=_iters)
-        if (cands):
-            resume_model = cands[-1]
+        if (os.path.isfile(resume_marker)):
+            resume_model = open(resume_marker).read().strip()
+            print(f"[policy] resume via marker: {resume_model}", flush=True)
+        elif (os.environ.get("X1_RESUME_MODEL", "")):
+            resume_model = os.environ["X1_RESUME_MODEL"]
+        if (not resume_model):
+            cands = sorted(glob.glob(os.path.join(repo, "model_20*.pt")))
+            if (not cands):
+                staged = os.path.join(repo, "data/models/smp_policies")
+                # select by iteration count parsed from the file name
+                # (x1_policy_10k5.pt -> 10500); git-checkout mtimes are
+                # all equal so mtime sorting degenerates to lexicographic
+                def _iters(path):
+                    import re as _re
+                    m = _re.search(r"(\d+)k(\d*)", os.path.basename(path))
+                    if (not m):
+                        return -1
+                    return int(m.group(1)) * 1000 + int(m.group(2) or 0)
+                cands = sorted(glob.glob(os.path.join(staged, "*.pt")),
+                               key=_iters)
+            if (cands):
+                resume_model = cands[-1]
     arg_file = os.environ.get("X1_ARG_FILE", "args/smp_x1_args.txt")
     # marker file (committed for probe tasks; env vars don't reach the
     # container through gm-run)
