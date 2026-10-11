@@ -121,7 +121,18 @@ MuJoCo S1–S6 门数据存档：`.gmhome/gates_10k8.json`。
 引擎侧直线跑步尚未达成（1.07m vs 5m 门）；MuJoCo 侧 multistart 持平 0.11s（预期，
 nominal 栈）。
 
-## 9. 阻塞与建议下一步
+## 9. 引擎侧直线慢跑达成（2026-10-11，mixed-r5b）
+
+**验收 PASS**：x1_policy_mixL5（task 0.7/smp 0.3 + dist 1.0 + std 0.15 + warm f3k5，
+累计 ~22k mixed iters）引擎 rollout **NET 15.69m/10s = 1.57 m/s 持续直线前进**
+（每秒 1.14→1.71m 稳定），通过 5m/10s 验收门且在慢跑速度带（1.0-2.6 m/s）。
+Train_Return 轨迹 84→88→92.5→118（dist 2.0 曾致回退 0.44-0.77m，回 1.0+task 0.7 后突破）。
+视频：`output/videos/isaac_jogging_mixL5_mesh.mp4`（x1 mesh，300 帧）。
+
+MuJoCo 侧：mixL5 strict multistart 仍 0.11s 全灭（nominal 隐式执行器栈，与此前
+9 权重一致）——引擎内跑步达成并未改变跨引擎迁移差距（报告 §7 结论仍成立）。
+
+## 10. 阻塞与建议下一步
 
 **阻塞**：见 §6（16/16 账号余额耗尽，审计存档 output/balance_audit_20261007.txt）。
 
