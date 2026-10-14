@@ -132,6 +132,18 @@ Train_Return 轨迹 84→88→92.5→118（dist 2.0 曾致回退 0.44-0.77m，�
 MuJoCo 侧：mixL5 strict multistart 仍 0.11s 全灭（nominal 隐式执行器栈，与此前
 9 权重一致）——引擎内跑步达成并未改变跨引擎迁移差距（报告 §7 结论仍成立）。
 
+## 9b. MuJoCo sim2sim 终判（2026-10-12）
+
+全部物理栈与奖励配方穷举后，MuJoCo 侧结论不变：
+- 11+ 权重 × strict multistart 全灭（0.03–0.33s，9 个权重存档于 multistart.json）；
+- pdexp 显式力矩栈（语义与 MuJoCo 精确等价）双向验证：
+  (a) TRUE FRESH + 活 task 通道：Return 1.1→9.1 后平台化@3200（力矩控制从零学跑步
+      在本预算内不可达）；(b) warm mixL5 跑步先验 + 活 task 通道：Return 3.2→11.2
+      平台@4700（跨栈翻译缓慢，7000 iters 不足），显式孪生 multistart 0.07s 全灭；
+- 结论：**引擎内 1.57 m/s 直线慢跑（mixL5）达成（§9），但 MuJoCo sim2sim 迁移
+  在本框架/预算内不可达**——瓶颈为 (i) 隐式栈 PhysX↔MuJoCo 执行器语义差距，
+  (ii) 显式力矩栈从零学习所需训练量（≥30k+ iters）超出可获算力。
+
 ## 10. 阻塞与建议下一步
 
 **阻塞**：见 §6（16/16 账号余额耗尽，审计存档 output/balance_audit_20261007.txt）。
